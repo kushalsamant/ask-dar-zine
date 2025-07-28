@@ -1,0 +1,206 @@
+import os
+import sys
+import subprocess
+import logging
+from datetime import datetime
+
+# === 🔧 Setup real-time logging ===
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+log_filename = os.path.join(LOG_DIR, f"zine_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(log_filename, mode='w', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+log = logging.getLogger()
+
+# === 🛠️ Auto-install missing dependencies ===
+REQUIRED_LIBS = [
+    'python-dotenv', 'replicate', 'reportlab',
+    'feedparser', 'requests', 'Pillow'
+]
+
+def install_missing_libs():
+    for lib in REQUIRED_LIBS:
+        try:
+            __import__(lib if lib != 'python-dotenv' else 'dotenv')
+        except ImportError:
+            log.warning(f"Missing dependency detected: {lib}. Installing...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
+            log.info(f"Installed: {lib}")
+
+install_missing_libs()
+
+# === Now import everything ===
+import replicate, requests, feedparser
+from dotenv import load_dotenv
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
+from PIL import Image
+from io import BytesIO
+import random
+
+# === 📥 Load environment variables ===
+load_dotenv()
+
+# === 📌 Environment config ===
+def get_env(var, default=None, required=False):
+    value = os.getenv(var, default)
+    if required and not value:
+        log.error(f"Required environment variable '{var}' is missing. Exiting.")
+        sys.exit(1)
+    return value
+
+TEXT_PROVIDER = get_env("TEXT_PROVIDER", "groq")
+TEXT_MODEL = get_env("TEXT_MODEL", required=True)
+NUM_SPREADS = int(get_env("NUM_SPREADS", "10"))
+FILTER_KEYWORDS = [kw.strip() for kw in get_env("FILTER_KEYWORDS", "").split(",") if kw.strip()]
+IMAGE_WIDTH = int(get_env("IMAGE_WIDTH", "1024"))
+IMAGE_HEIGHT = int(get_env("IMAGE_HEIGHT", "1024"))
+IMAGE_DPI = int(get_env("IMAGE_DPI", "300"))
+CAPTION_POSITION = get_env("CAPTION_POSITION", "bottom")
+NUM_STEPS = int(get_env("NUM_INFERENCE_STEPS", "30"))
+GUIDANCE_SCALE = float(get_env("GUIDANCE_SCALE", "7.5"))
+TITLE_TEMPLATE = get_env("TITLE_TEMPLATE", "ASK: {theme}")
+OUTPUT_PATH = get_env("OUTPUT_PATH", "output")
+
+# === API Keys and Endpoints ===
+API_BASES = {
+    "groq": get_env("GROQ_API_BASE", "https://api.groq.com/openai/v1"),
+    "together": get_env("TOGETHER_API_BASE", "https://api.together.xyz/v1")
+}
+API_KEYS = {
+    "groq": get_env("GROQ_API_KEY", required=True),
+    "together": get_env("TOGETHER_API_KEY")
+}
+
+HEADERS = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {API_KEYS[TEXT_PROVIDER]}"
+}
+TEXT_API_URL = f"{API_BASES[TEXT_PROVIDER]}/chat/completions"
+
+# === 🌐 STEP 1: Get theme from RSS or CLI ===
+def get_theme_from_rss():
+    urls = [u.strip() for u in get_env("RSS_FEEDS", "").split(",") if u.strip()]
+    headlines = []
+    for url in urls:
+        try:
+            feed = feedparser.parse(url)
+            for e in feed.entries:
+                t = e.title.strip()
+                if t and (not FILTER_KEYWORDS or any(kw.lower() in t.lower() for kw in FILTER_KEYWORDS)):
+                    headlines.append(t)
+        except Exception as e:
+            log.warning(f"RSS failed for {url}: {e}")
+    return random.choice(headlines) if headlines else get_env("FALLBACK_THEME", "Architecture & AI")
+
+def get_theme():
+    if len(sys.argv) > 1:
+        return ' '.join(sys.argv[1:])
+    return get_theme_from_rss()
+
+# === 🧠 STEP 2: Prompt + Caption generation using Groq/Together API ===
+def call_llm(messages):
+    try:
+        response = requests.post(TEXT_API_URL, headers=HEADERS, json={
+            "model": TEXT_MODEL,
+            "messages": messages
+        })
+        result = response.json()
+        return result['choices'][0]['message']['content']
+    except Exception as e:
+        log.error(f"LLM call failed: {e}")
+        return ""
+
+def generate_prompts_and_captions(theme):
+    prompts_msg = [
+        {"role": "system", "content": get_env("PROMPT_SYSTEM", "You're an architectural provocateur zine writer.")},
+        {"role": "user", "content": get_env("PROMPT_TEMPLATE", "Generate {n} image prompts on theme: '{theme}'.").format(n=NUM_SPREADS, theme=theme)}
+    ]
+    raw = call_llm(prompts_msg)
+    prompts = [line.strip("1234567890. ") for line in raw.split('\n') if line.strip()][:NUM_SPREADS]
+    captions = []
+    for prompt in prompts:
+        cap_msg = [
+            {"role": "system", "content": get_env("CAPTION_SYSTEM", "You're a poetic architect writing 6x6 captions.")},
+            {"role": "user", "content": get_env("CAPTION_TEMPLATE", "Write a Socratic 6‑line, 6‑word caption for: {prompt}").format(prompt=prompt)}
+        ]
+        captions.append(call_llm(cap_msg))
+    return prompts, captions
+
+# === 🎨 STEP 3: Generate images ===
+def generate_images(prompts):
+    images = []
+    model_ref = get_env("REPLICATE_MODEL", required=True)
+    for prompt in prompts:
+        try:
+            output = replicate.run(model_ref, input={
+                "prompt": prompt,
+                "width": IMAGE_WIDTH,
+                "height": IMAGE_HEIGHT,
+                "num_inference_steps": NUM_STEPS,
+                "guidance_scale": GUIDANCE_SCALE
+            })
+            images.append(output[0] if isinstance(output, list) else output)
+        except Exception as e:
+            log.error(f"Image gen failed for prompt '{prompt}': {e}")
+            images.append(None)
+    return images
+
+# === 🖼️ STEP 4: Place captions ===
+def place_caption(c, cap, pos, w, h):
+    text = cap.split('\n')
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(0, 0, 0)
+    spacing = 12
+    if pos == "bottom":
+        for i, line in enumerate(text):
+            c.drawString(30, 40 + i * spacing, line)
+    elif pos == "center":
+        for i, line in enumerate(text):
+            c.drawCentredString(w / 2, h / 2 - i * spacing, line)
+    elif pos == "top":
+        for i, line in enumerate(text):
+            c.drawString(30, h - 100 - i * spacing, line)
+    # Add more positions as needed
+
+# === 📄 STEP 5: Build PDF ===
+def make_pdf(images, captions, theme):
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
+    title = TITLE_TEMPLATE.format(theme=theme).replace(" ", "_")
+    fname = os.path.join(OUTPUT_PATH, f"{title}.pdf")
+    c = canvas.Canvas(fname, pagesize=A4)
+    w, h = A4
+    for img_url, cap in zip(images, captions):
+        try:
+            resp = requests.get(img_url)
+            img = Image.open(BytesIO(resp.content))
+            img.load()
+            img.save("temp_img.jpg", dpi=(IMAGE_DPI, IMAGE_DPI))
+            c.drawImage("temp_img.jpg", 0, 0, width=w, height=h)
+        except Exception as e:
+            log.warning(f"Couldn't render image: {e}")
+        place_caption(c, cap, CAPTION_POSITION, w, h)
+        c.showPage()
+    c.save()
+    log.info(f"PDF saved to: {fname}")
+
+# === 🚀 MAIN RUN ===
+def main():
+    theme = get_theme()
+    log.info(f"Theme selected: {theme}")
+    prompts, captions = generate_prompts_and_captions(theme)
+    log.info("Prompts and captions generated")
+    images = generate_images(prompts)
+    log.info("Images generated")
+    make_pdf(images, captions, theme)
+    log.info("Zine build complete.")
+
+if __name__ == "__main__":
+    main()
