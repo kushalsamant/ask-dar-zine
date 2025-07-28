@@ -20,9 +20,12 @@ An AI-powered architectural zine generator that creates PDF zines from RSS feeds
 
 ### 2. API Key Sources
 
-- **Groq**: Visit https://console.groq.com/ and create an API key
-- **Replicate**: Visit https://replicate.com/account/api-tokens and create a token
-- **Together AI**: Visit https://together.ai/ and create an API key (optional)
+**Required:**
+- **Together AI**: Visit https://together.ai/ and create an API key (for text generation)
+- **Replicate**: Visit https://replicate.com/account/api-tokens and create a token (for image generation)
+
+**Optional:**
+- **Groq**: Visit https://console.groq.com/ and create an API key (alternative to Together AI)
 
 ### 3. Verify .gitignore
 

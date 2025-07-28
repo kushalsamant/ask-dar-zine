@@ -8,7 +8,7 @@ from datetime import datetime
 # === 🔧 Setup real-time logging ===
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
-log_filename = os.path.join(LOG_DIR, f"zine_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+log_filename = os.path.join(LOG_DIR, f"multi_style_zine_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -86,14 +86,58 @@ GUIDANCE_SCALE = float(get_env("GUIDANCE_SCALE", "7.5"))
 TITLE_TEMPLATE = get_env("TITLE_TEMPLATE", "ASK: {theme}")
 OUTPUT_PATH = get_env("OUTPUT_PATH", "output")
 
+# === 🎨 Multi-Style Image Generation Models ===
+STYLE_MODELS = {
+    "photorealistic": {
+        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+        "style_prompt": "photorealistic architectural photography, high resolution, professional lighting",
+        "description": "Photorealistic architectural photography"
+    },
+    "anime": {
+        "model": "cjwbw/anything-v3-better-vae:09a5805203f4c12da649ec1923e9dafc1e7d0aed5e2d0c35a658ac25f4f4d1b8",
+        "style_prompt": "anime style, architectural illustration, vibrant colors, detailed linework",
+        "description": "Anime-style architectural illustrations"
+    },
+    "watercolor": {
+        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+        "style_prompt": "watercolor painting style, architectural art, soft colors, artistic interpretation",
+        "description": "Watercolor architectural paintings"
+    },
+    "technical": {
+        "model": "jagilley/controlnet-scribble:435061a1b5a4c1e26740464bf786efdfa9cb3a3ac488595a2de23e143fdb0117",
+        "style_prompt": "technical architectural drawing, blueprint style, precise lines, engineering diagram",
+        "description": "Technical architectural drawings"
+    },
+    "abstract": {
+        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+        "style_prompt": "abstract architectural art, geometric forms, modern art style, conceptual design",
+        "description": "Abstract architectural art"
+    },
+    "sketch": {
+        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+        "style_prompt": "architectural sketch, hand-drawn style, pencil drawing, artistic sketch",
+        "description": "Hand-drawn architectural sketches"
+    },
+    "minimalist": {
+        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+        "style_prompt": "minimalist architectural design, clean lines, simple forms, modern minimalism",
+        "description": "Minimalist architectural design"
+    },
+    "futuristic": {
+        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+        "style_prompt": "futuristic architecture, sci-fi design, advanced technology, cyberpunk style",
+        "description": "Futuristic architectural concepts"
+    }
+}
+
 # === API Keys and Endpoints ===
 API_BASES = {
     "groq": get_env("GROQ_API_BASE", "https://api.groq.com/openai/v1"),
     "together": get_env("TOGETHER_API_BASE", "https://api.together.xyz/v1")
 }
 API_KEYS = {
-    "groq": get_env("GROQ_API_KEY"),
-    "together": get_env("TOGETHER_API_KEY", required=True)
+    "groq": get_env("GROQ_API_KEY", required=True),
+    "together": get_env("TOGETHER_API_KEY")
 }
 
 HEADERS = {
@@ -122,10 +166,10 @@ def get_theme():
         return ' '.join(sys.argv[1:])
     return get_theme_from_rss()
 
-# === 🧠 STEP 2: Prompt + Caption generation using Groq/Together API ===
+# === 🧠 STEP 2: Prompt + Caption generation ===
 def call_llm(messages):
     try:
-        # Add small delay to avoid rate limiting with 70B model
+        # Add small delay to avoid rate limiting
         time.sleep(1)
         
         response = requests.post(TEXT_API_URL, headers=HEADERS, json={
@@ -194,24 +238,46 @@ def validate_caption(caption):
 
 def generate_prompts_and_captions(theme):
     prompts_msg = [
-        {"role": "system", "content": get_env("PROMPT_SYSTEM", "You're an architectural provocateur zine writer.")},
-        {"role": "user", "content": get_env("PROMPT_TEMPLATE", "Generate {n} image prompts on theme: '{theme}'.").format(n=NUM_SPREADS, theme=theme)}
+        {"role": "system", "content": get_env("PROMPT_SYSTEM", "You are a visionary architectural writer and provocateur. You create compelling, artistic image prompts that capture the essence of architectural concepts with vivid, poetic language.")},
+        {"role": "user", "content": get_env("PROMPT_TEMPLATE", "Generate {n} architectural image prompts on theme: '{theme}'. Each prompt should be a single, evocative line that describes a visual scene with artistic flair. Focus on mood, atmosphere, and architectural poetry. Do not include explanations or numbered lists - just the prompts, one per line.").format(n=NUM_SPREADS, theme=theme)}
     ]
     raw = call_llm(prompts_msg)
     
     if not raw or raw.strip() == "":
         raise Exception("LLM returned empty response for prompts")
     
-    prompts = [line.strip("1234567890. ") for line in raw.split('\n') if line.strip()][:NUM_SPREADS]
+    # Parse prompts more robustly
+    lines = [line.strip() for line in raw.split('\n') if line.strip()]
+    prompts = []
+    
+    for line in lines:
+        # Remove numbering and common prefixes
+        cleaned = line.strip("1234567890. -•*")
+        if cleaned and len(cleaned) > 10:  # Ensure it's a meaningful prompt
+            prompts.append(cleaned)
+    
+    # If we still don't have enough, try to split longer responses
+    if len(prompts) < NUM_SPREADS and len(lines) > 0:
+        # Try to split by common separators
+        for line in lines:
+            if ',' in line or ';' in line:
+                parts = line.replace(',', '\n').replace(';', '\n').split('\n')
+                for part in parts:
+                    cleaned = part.strip("1234567890. -•*")
+                    if cleaned and len(cleaned) > 10 and len(prompts) < NUM_SPREADS:
+                        prompts.append(cleaned)
     
     if len(prompts) < NUM_SPREADS:
-        raise Exception(f"LLM only generated {len(prompts)} prompts, need {NUM_SPREADS}")
+        log.warning(f"LLM only generated {len(prompts)} prompts, need {NUM_SPREADS}. Raw response: {raw[:200]}...")
+        # Pad with variations of the theme
+        while len(prompts) < NUM_SPREADS:
+            prompts.append(f"Architectural interpretation of {theme} with artistic vision")
     
     captions = []
     for prompt in prompts:
         cap_msg = [
-            {"role": "system", "content": get_env("CAPTION_SYSTEM", "You're a poetic architect writing 6x6 captions.")},
-            {"role": "user", "content": get_env("CAPTION_TEMPLATE", "Write exactly 6 lines, each containing exactly 6 words, that form a complete, meaningful caption for this architectural image: {prompt}. Each line should be a complete thought and the entire caption should tell a coherent story.").format(prompt=prompt)}
+            {"role": "system", "content": get_env("CAPTION_SYSTEM", "You are a masterful architectural poet and critic. You write profound, artistic captions that capture the deeper meaning and emotional resonance of architectural spaces.")},
+            {"role": "user", "content": get_env("CAPTION_TEMPLATE", "Write exactly 6 lines, each containing exactly 6 words, that form a complete, meaningful caption for this architectural image: {prompt}. Each line should be a complete thought with poetic depth. The entire caption should tell a coherent story that reveals the architectural philosophy, emotional impact, and cultural significance of the space.").format(prompt=prompt)}
         ]
         raw_caption = call_llm(cap_msg)
         
@@ -223,22 +289,31 @@ def generate_prompts_and_captions(theme):
         log.info(f"Generated caption for '{prompt[:50]}...': {len(validated_caption.split('\n'))} lines")
     return prompts, captions
 
-# === 🎨 STEP 3: Generate images ===
-def generate_images(prompts):
+# === 🎨 STEP 3: Generate images with different styles ===
+def generate_images_with_style(prompts, style_name):
     images = []
-    model_ref = get_env("REPLICATE_MODEL", required=True)
-    for prompt in prompts:
+    style_config = STYLE_MODELS[style_name]
+    model_ref = style_config["model"]
+    style_prompt = style_config["style_prompt"]
+    
+    log.info(f"Generating images with {style_name} style: {style_config['description']}")
+    
+    for i, prompt in enumerate(prompts):
         try:
+            # Combine the architectural prompt with the style prompt
+            full_prompt = f"{prompt}, {style_prompt}"
+            
             output = replicate.run(model_ref, input={
-                "prompt": prompt,
+                "prompt": full_prompt,
                 "width": IMAGE_WIDTH,
                 "height": IMAGE_HEIGHT,
                 "num_inference_steps": NUM_STEPS,
                 "guidance_scale": GUIDANCE_SCALE
             })
             images.append(output[0] if isinstance(output, list) else output)
+            log.info(f"Generated {style_name} image {i+1}/{len(prompts)}")
         except Exception as e:
-            log.error(f"Image gen failed for prompt '{prompt}': {e}")
+            log.error(f"Image gen failed for {style_name} style, prompt '{prompt}': {e}")
             images.append(None)
     return images
 
@@ -257,12 +332,11 @@ def place_caption(c, cap, pos, w, h):
     elif pos == "top":
         for i, line in enumerate(text):
             c.drawString(30, h - 100 - i * spacing, line)
-    # Add more positions as needed
 
 # === 📄 STEP 5: Build PDF ===
-def make_pdf(images, captions, theme):
+def make_pdf(images, captions, theme, style_name):
     os.makedirs(OUTPUT_PATH, exist_ok=True)
-    title = TITLE_TEMPLATE.format(theme=theme).replace(" ", "_")
+    title = f"{TITLE_TEMPLATE.format(theme=theme)}_{style_name}".replace(" ", "_")
     fname = os.path.join(OUTPUT_PATH, f"{title}.pdf")
     c = canvas.Canvas(fname, pagesize=A4)
     w, h = A4
@@ -295,21 +369,62 @@ def make_pdf(images, captions, theme):
         place_caption(c, cap, CAPTION_POSITION, w, h)
         c.showPage()
         
-        log.info(f"Created spread {i+1}/10 (pages {i*2+1}-{i*2+2})")
+        log.info(f"Created {style_name} spread {i+1}/{len(images)} (pages {i*2+1}-{i*2+2})")
     
     c.save()
     log.info(f"PDF saved to: {fname} (20 pages total)")
+    return fname
 
 # === 🚀 MAIN RUN ===
+def generate_zine_for_style(theme, style_name):
+    """Generate a complete zine for a specific style"""
+    log.info(f"=== Generating {style_name.upper()} Style Zine ===")
+    
+    try:
+        # Generate prompts and captions
+        prompts, captions = generate_prompts_and_captions(theme)
+        log.info(f"Generated {len(prompts)} prompts and captions for {style_name} style")
+        
+        # Generate images with the specific style
+        images = generate_images_with_style(prompts, style_name)
+        log.info(f"Generated {len(images)} images for {style_name} style")
+        
+        # Create PDF
+        pdf_path = make_pdf(images, captions, theme, style_name)
+        log.info(f"✅ {style_name.upper()} zine complete: {pdf_path}")
+        
+        return pdf_path
+        
+    except Exception as e:
+        log.error(f"❌ Failed to generate {style_name} zine: {e}")
+        return None
+
 def main():
     theme = get_theme()
     log.info(f"Theme selected: {theme}")
-    prompts, captions = generate_prompts_and_captions(theme)
-    log.info("Prompts and captions generated")
-    images = generate_images(prompts)
-    log.info("Images generated")
-    make_pdf(images, captions, theme)
-    log.info("Zine build complete.")
+    
+    # Generate zines for all styles
+    generated_zines = []
+    
+    for style_name in STYLE_MODELS.keys():
+        try:
+            pdf_path = generate_zine_for_style(theme, style_name)
+            if pdf_path:
+                generated_zines.append((style_name, pdf_path))
+        except Exception as e:
+            log.error(f"Failed to generate {style_name} zine: {e}")
+            continue
+    
+    # Summary
+    log.info(f"=== GENERATION COMPLETE ===")
+    log.info(f"Successfully generated {len(generated_zines)} zines:")
+    for style_name, pdf_path in generated_zines:
+        log.info(f"✅ {style_name.upper()}: {pdf_path}")
+    
+    if not generated_zines:
+        log.error("❌ No zines were generated successfully")
+    else:
+        log.info(f"🎉 Collection complete! {len(generated_zines)} different artistic styles generated.")
 
 if __name__ == "__main__":
-    main()
+    main() 
