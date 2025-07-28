@@ -25,13 +25,29 @@ REQUIRED_LIBS = [
 ]
 
 def install_missing_libs():
+    missing_libs = []
     for lib in REQUIRED_LIBS:
         try:
-            __import__(lib if lib != 'python-dotenv' else 'dotenv')
+            if lib == 'python-dotenv':
+                __import__('dotenv')
+            elif lib == 'Pillow':
+                __import__('PIL')
+            else:
+                __import__(lib)
         except ImportError:
-            log.warning(f"Missing dependency detected: {lib}. Installing...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
-            log.info(f"Installed: {lib}")
+            missing_libs.append(lib)
+    
+    if missing_libs:
+        log.info(f"Installing missing dependencies: {', '.join(missing_libs)}")
+        for lib in missing_libs:
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
+                log.info(f"Installed: {lib}")
+            except subprocess.CalledProcessError as e:
+                log.error(f"Failed to install {lib}: {e}")
+                sys.exit(1)
+    else:
+        log.info("All dependencies are already installed")
 
 install_missing_libs()
 
@@ -46,7 +62,7 @@ from io import BytesIO
 import random
 
 # === 📥 Load environment variables ===
-load_dotenv()
+load_dotenv('ask.env')
 
 # === 📌 Environment config ===
 def get_env(var, default=None, required=False):
@@ -118,6 +134,46 @@ def call_llm(messages):
         log.error(f"LLM call failed: {e}")
         return ""
 
+def validate_caption(caption):
+    """Validate and fix caption to ensure 6 lines of 6 words each"""
+    lines = [line.strip() for line in caption.split('\n') if line.strip()]
+    
+    # If we don't have exactly 6 lines, try to fix it
+    if len(lines) != 6:
+        # Split by periods or other punctuation if needed
+        if len(lines) == 1:
+            # Single line - try to split into 6 parts
+            words = lines[0].split()
+            if len(words) >= 36:
+                lines = []
+                for i in range(6):
+                    start = i * 6
+                    end = start + 6
+                    lines.append(' '.join(words[start:end]))
+            else:
+                # Pad with meaningful text
+                while len(lines) < 6:
+                    lines.append("Architecture speaks through silent spaces")
+    
+    # Ensure each line has exactly 6 words
+    fixed_lines = []
+    for line in lines[:6]:  # Take only first 6 lines
+        words = line.split()
+        if len(words) > 6:
+            words = words[:6]
+        elif len(words) < 6:
+            # Pad with meaningful words
+            padding = ["in", "the", "space", "between", "dreams", "reality"]
+            while len(words) < 6:
+                words.append(padding[len(words) % len(padding)])
+        fixed_lines.append(' '.join(words))
+    
+    # Ensure we have exactly 6 lines
+    while len(fixed_lines) < 6:
+        fixed_lines.append("Architecture speaks through silent spaces")
+    
+    return '\n'.join(fixed_lines[:6])
+
 def generate_prompts_and_captions(theme):
     prompts_msg = [
         {"role": "system", "content": get_env("PROMPT_SYSTEM", "You're an architectural provocateur zine writer.")},
@@ -129,9 +185,12 @@ def generate_prompts_and_captions(theme):
     for prompt in prompts:
         cap_msg = [
             {"role": "system", "content": get_env("CAPTION_SYSTEM", "You're a poetic architect writing 6x6 captions.")},
-            {"role": "user", "content": get_env("CAPTION_TEMPLATE", "Write a Socratic 6‑line, 6‑word caption for: {prompt}").format(prompt=prompt)}
+            {"role": "user", "content": get_env("CAPTION_TEMPLATE", "Write exactly 6 lines, each containing exactly 6 words, that form a complete, meaningful caption for this architectural image: {prompt}. Each line should be a complete thought and the entire caption should tell a coherent story.").format(prompt=prompt)}
         ]
-        captions.append(call_llm(cap_msg))
+        raw_caption = call_llm(cap_msg)
+        validated_caption = validate_caption(raw_caption)
+        captions.append(validated_caption)
+        log.info(f"Generated caption for '{prompt[:50]}...': {len(validated_caption.split('\n'))} lines")
     return prompts, captions
 
 # === 🎨 STEP 3: Generate images ===

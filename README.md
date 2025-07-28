@@ -34,7 +34,14 @@ The `.gitignore` file should exclude:
 
 ## 🚀 Usage
 
+### Option 1: Auto-install (Recommended)
 ```bash
+python zine_generator_with_log.py [optional_theme]
+```
+
+### Option 2: Manual install
+```bash
+pip install -r requirements.txt
 python zine_generator_with_log.py [optional_theme]
 ```
 
