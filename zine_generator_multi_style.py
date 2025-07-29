@@ -83,7 +83,7 @@ IMAGE_DPI = int(get_env("IMAGE_DPI", "300"))
 CAPTION_POSITION = get_env("CAPTION_POSITION", "bottom")
 NUM_STEPS = int(get_env("NUM_INFERENCE_STEPS", "30"))
 GUIDANCE_SCALE = float(get_env("GUIDANCE_SCALE", "7.5"))
-TITLE_TEMPLATE = get_env("TITLE_TEMPLATE", "ASK: {theme}")
+TITLE_TEMPLATE = get_env("ZINE_TITLE_TEMPLATE", "ASK Volume {theme}")
 OUTPUT_PATH = get_env("OUTPUT_PATH", "output")
 
 # === 🎨 Multi-Style Image Generation Models ===
@@ -136,8 +136,8 @@ API_BASES = {
     "together": get_env("TOGETHER_API_BASE", "https://api.together.xyz/v1")
 }
 API_KEYS = {
-    "groq": get_env("GROQ_API_KEY"),
-    "together": get_env("TOGETHER_API_KEY", required=True)
+    "groq": get_env("GROQ_API_KEY", required=True),
+    "together": get_env("TOGETHER_API_KEY")
 }
 
 HEADERS = {
@@ -292,9 +292,17 @@ def generate_prompts_and_captions(theme):
 # === 🎨 STEP 3: Generate images with different styles ===
 def generate_images_with_style(prompts, style_name):
     images = []
+    image_paths = []
     style_config = STYLE_MODELS[style_name]
     model_ref = style_config["model"]
     style_prompt = style_config["style_prompt"]
+    
+    # Create images directory for this style
+    images_dir = os.path.join("images", style_name)
+    os.makedirs(images_dir, exist_ok=True)
+    
+    # Create image log file
+    image_log_file = os.path.join(images_dir, f"{style_name}_image_log.txt")
     
     log.info(f"Generating images with {style_name} style: {style_config['description']}")
     
@@ -310,33 +318,106 @@ def generate_images_with_style(prompts, style_name):
                 "num_inference_steps": NUM_STEPS,
                 "guidance_scale": GUIDANCE_SCALE
             })
-            images.append(output[0] if isinstance(output, list) else output)
-            log.info(f"Generated {style_name} image {i+1}/{len(prompts)}")
+            
+            image_url = output[0] if isinstance(output, list) else output
+            
+            # Download and save image locally with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
+            image_path = os.path.join(images_dir, image_filename)
+            
+            resp = requests.get(image_url)
+            with open(image_path, 'wb') as f:
+                f.write(resp.content)
+            
+            # Log image details
+            with open(image_log_file, 'a', encoding='utf-8') as log_file:
+                log_file.write(f"Image {i+1}: {image_filename}\n")
+                log_file.write(f"Prompt: {prompt}\n")
+                log_file.write(f"Full Prompt: {full_prompt}\n")
+                log_file.write(f"URL: {image_url}\n")
+                log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                log_file.write("-" * 80 + "\n")
+            
+            images.append(image_url)  # Keep URL for compatibility
+            image_paths.append(image_path)
+            log.info(f"Generated and saved {style_name} image {i+1}/{len(prompts)}: {image_path}")
+            
         except Exception as e:
             log.error(f"Image gen failed for {style_name} style, prompt '{prompt}': {e}")
             images.append(None)
-    return images
+            image_paths.append(None)
+    
+    return images, image_paths
 
 # === 🖼️ STEP 4: Place captions ===
 def place_caption(c, cap, pos, w, h):
     text = cap.split('\n')
-    c.setFont("Helvetica", 10)
+    font_size = int(get_env("CAPTION_FONT_SIZE", "14"))
+    line_spacing = int(get_env("CAPTION_LINE_SPACING", "18"))
+    
+    c.setFont("Helvetica-Bold", font_size)
     c.setFillColorRGB(0, 0, 0)
-    spacing = 12
+    
+    # Calculate total height of caption block
+    total_height = len(text) * line_spacing
+    
     if pos == "bottom":
+        # Position at bottom with proper margins
+        start_y = 60
+        
+        # Add subtle background for better readability
+        c.setFillColorRGB(0.95, 0.95, 0.95)
+        c.rect(30, start_y - 10, w - 60, total_height + 20, fill=1)
+        c.setFillColorRGB(0, 0, 0)
+        
         for i, line in enumerate(text):
-            c.drawString(30, 40 + i * spacing, line)
+            c.drawString(40, start_y + i * line_spacing, line)
     elif pos == "center":
+        # Center the entire caption block
+        start_y = (h + total_height) / 2
         for i, line in enumerate(text):
-            c.drawCentredString(w / 2, h / 2 - i * spacing, line)
+            c.drawCentredString(w / 2, start_y - i * line_spacing, line)
     elif pos == "top":
+        # Position at top with proper margins
+        start_y = h - 120
         for i, line in enumerate(text):
-            c.drawString(30, h - 100 - i * spacing, line)
+            c.drawString(40, start_y - i * line_spacing, line)
+    elif pos == "top-right":
+        # Position at top-right corner
+        start_y = h - 120
+        for i, line in enumerate(text):
+            c.drawRightString(w - 40, start_y - i * line_spacing, line)
+    elif pos == "top-left":
+        # Position at top-left corner
+        start_y = h - 120
+        for i, line in enumerate(text):
+            c.drawString(40, start_y - i * line_spacing, line)
+    elif pos == "bottom-right":
+        # Position at bottom-right corner
+        start_y = 60
+        for i, line in enumerate(text):
+            c.drawRightString(w - 40, start_y + i * line_spacing, line)
+    elif pos == "bottom-left":
+        # Position at bottom-left corner
+        start_y = 60
+        for i, line in enumerate(text):
+            c.drawString(40, start_y + i * line_spacing, line)
+    elif pos == "left":
+        # Position at left side, centered vertically
+        start_y = (h + total_height) / 2
+        for i, line in enumerate(text):
+            c.drawString(40, start_y - i * line_spacing, line)
+    elif pos == "right":
+        # Position at right side, centered vertically
+        start_y = (h + total_height) / 2
+        for i, line in enumerate(text):
+            c.drawRightString(w - 40, start_y - i * line_spacing, line)
 
 # === 📄 STEP 5: Build PDF ===
 def make_pdf(images, captions, theme, style_name):
     os.makedirs(OUTPUT_PATH, exist_ok=True)
-    title = f"{TITLE_TEMPLATE.format(theme=theme)}_{style_name}".replace(" ", "_")
+    title = f"{TITLE_TEMPLATE.format(theme=theme)}_{style_name}".replace(" ", "_").replace(":", "_").replace("&", "and")
     fname = os.path.join(OUTPUT_PATH, f"{title}.pdf")
     c = canvas.Canvas(fname, pagesize=A4)
     w, h = A4
@@ -376,9 +457,9 @@ def make_pdf(images, captions, theme, style_name):
     return fname
 
 # === 🚀 MAIN RUN ===
-def generate_zine_for_style(theme, style_name):
-    """Generate a complete zine for a specific style"""
-    log.info(f"=== Generating {style_name.upper()} Style Zine ===")
+def generate_images_for_style(theme, style_name):
+    """Generate images for a specific style (no PDF creation)"""
+    log.info(f"=== Generating {style_name.upper()} Style Images ===")
     
     try:
         # Generate prompts and captions
@@ -386,45 +467,55 @@ def generate_zine_for_style(theme, style_name):
         log.info(f"Generated {len(prompts)} prompts and captions for {style_name} style")
         
         # Generate images with the specific style
-        images = generate_images_with_style(prompts, style_name)
+        images, image_paths = generate_images_with_style(prompts, style_name)
         log.info(f"Generated {len(images)} images for {style_name} style")
         
-        # Create PDF
-        pdf_path = make_pdf(images, captions, theme, style_name)
-        log.info(f"✅ {style_name.upper()} zine complete: {pdf_path}")
+        # Store captions for later use in weekly/monthly PDFs
+        captions_file = os.path.join("captions", f"{style_name}_captions.txt")
+        os.makedirs("captions", exist_ok=True)
+        with open(captions_file, 'w', encoding='utf-8') as f:
+            for i, caption in enumerate(captions):
+                f.write(f"Image {i+1}: {caption}\n")
         
-        return pdf_path
+        log.info(f"✅ {style_name.upper()} images complete: {len(images)} images generated")
+        
+        return images, image_paths, captions
         
     except Exception as e:
-        log.error(f"❌ Failed to generate {style_name} zine: {e}")
-        return None
+        log.error(f"❌ Failed to generate {style_name} images: {e}")
+        return None, None, None
 
 def main():
     theme = get_theme()
     log.info(f"Theme selected: {theme}")
     
-    # Generate zines for all styles
-    generated_zines = []
+    # Generate images for all styles (no PDFs)
+    generated_images = []
     
     for style_name in STYLE_MODELS.keys():
         try:
-            pdf_path = generate_zine_for_style(theme, style_name)
-            if pdf_path:
-                generated_zines.append((style_name, pdf_path))
+            images, image_paths, captions = generate_images_for_style(theme, style_name)
+            if images:
+                generated_images.append((style_name, len(images)))
         except Exception as e:
-            log.error(f"Failed to generate {style_name} zine: {e}")
+            log.error(f"Failed to generate {style_name} images: {e}")
             continue
     
     # Summary
-    log.info(f"=== GENERATION COMPLETE ===")
-    log.info(f"Successfully generated {len(generated_zines)} zines:")
-    for style_name, pdf_path in generated_zines:
-        log.info(f"✅ {style_name.upper()}: {pdf_path}")
+    log.info(f"=== IMAGE GENERATION COMPLETE ===")
+    log.info(f"Successfully generated images for {len(generated_images)} styles:")
+    total_images = 0
+    for style_name, count in generated_images:
+        log.info(f"✅ {style_name.upper()}: {count} images")
+        total_images += count
     
-    if not generated_zines:
-        log.error("❌ No zines were generated successfully")
+    if not generated_images:
+        log.error("❌ No images were generated successfully")
     else:
-        log.info(f"🎉 Collection complete! {len(generated_zines)} different artistic styles generated.")
+        log.info(f"🎉 Image generation complete! {total_images} total images across {len(generated_images)} styles.")
+        log.info(f"📁 Images saved to: images/")
+        log.info(f"📝 Captions saved to: captions/")
+        log.info(f"📄 PDFs will be created by weekly/monthly curators")
 
 if __name__ == "__main__":
     main() 

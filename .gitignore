@@ -1,7 +1,7 @@
 # Environment variables and API keys
 .env
 *.env
-ask.env
+# ask.env - Keep this file for local development
 .env.local
 .env.production
 .env.staging
@@ -48,10 +48,16 @@ logs/
 *.log
 error.log
 
+# Generated content (tracked for curation)
+# images/ - Keep for weekly/monthly curation
+# captions/ - Keep for PDF generation
+# weekly_curated/ - Keep for version control
+# monthly_curated/ - Keep for version control
+
 # Output files
 output/
-images/
-temp_img.jpg
+# images/ - Keep generated images for curation
+# temp_img.jpg - Temporary file (already removed)
 
 # OS
 .DS_Store

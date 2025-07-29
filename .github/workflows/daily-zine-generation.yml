@@ -1,0 +1,143 @@
+name: Daily Zine Generation & Curation
+
+on:
+  schedule:
+    # Run daily at 4:00 AM UTC (adjust timezone as needed)
+    - cron: '0 4 * * *'
+    # Run weekly curator every Thursday at 4:00 AM UTC
+    - cron: '0 4 * * 4'
+    # Run monthly curator on the last day of the month at 4:00 AM UTC
+    - cron: '0 4 28-31 * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  generate-zine:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install python-dotenv replicate reportlab feedparser requests Pillow
+        
+    - name: Create ask.env from secrets
+      run: |
+        cat > ask.env << EOF
+        TEXT_PROVIDER=${{ secrets.TEXT_PROVIDER }}
+        TEXT_MODEL=${{ secrets.TEXT_MODEL }}
+        NUM_SPREADS=${{ secrets.NUM_SPREADS }}
+        FILTER_KEYWORDS=${{ secrets.FILTER_KEYWORDS }}
+        IMAGE_WIDTH=${{ secrets.IMAGE_WIDTH }}
+        IMAGE_HEIGHT=${{ secrets.IMAGE_HEIGHT }}
+        IMAGE_DPI=${{ secrets.IMAGE_DPI }}
+        CAPTION_POSITION=${{ secrets.CAPTION_POSITION }}
+        NUM_INFERENCE_STEPS=${{ secrets.NUM_INFERENCE_STEPS }}
+        GUIDANCE_SCALE=${{ secrets.GUIDANCE_SCALE }}
+        ZINE_TITLE_TEMPLATE=${{ secrets.ZINE_TITLE_TEMPLATE }}
+        OUTPUT_PATH=${{ secrets.OUTPUT_PATH }}
+        PROMPT_SYSTEM=${{ secrets.PROMPT_SYSTEM }}
+        PROMPT_TEMPLATE=${{ secrets.PROMPT_TEMPLATE }}
+        CAPTION_SYSTEM=${{ secrets.CAPTION_SYSTEM }}
+        CAPTION_TEMPLATE=${{ secrets.CAPTION_TEMPLATE }}
+        GROQ_API_BASE=${{ secrets.GROQ_API_BASE }}
+        GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+        TOGETHER_API_BASE=${{ secrets.TOGETHER_API_BASE }}
+        TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}
+        REPLICATE_API_TOKEN=${{ secrets.REPLICATE_API_TOKEN }}
+        RSS_FEEDS=${{ secrets.RSS_FEEDS }}
+        FALLBACK_THEME=${{ secrets.FALLBACK_THEME }}
+        CAPTION_FONT_SIZE=${{ secrets.CAPTION_FONT_SIZE }}
+        CAPTION_LINE_SPACING=${{ secrets.CAPTION_LINE_SPACING }}
+        EOF
+        
+    - name: Check day and month for curation
+      id: check-dates
+      run: |
+        # Check if it's Thursday (for weekly curation)
+        if [ "$(date +%u)" = "4" ]; then
+          echo "is_thursday=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_thursday=false" >> $GITHUB_OUTPUT
+        fi
+        
+        # Check if it's the last day of the month (for monthly curation)
+        current_day=$(date +%d)
+        last_day=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)
+        if [ "$current_day" = "$last_day" ]; then
+          echo "is_last_day_of_month=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_last_day_of_month=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Run daily image generation
+      run: |
+        python zine_generator_multi_style.py
+        
+    - name: Run weekly curator (Thursdays only)
+      if: steps.check-dates.outputs.is_thursday == 'true'
+      run: |
+        python weekly_curator.py
+        
+    - name: Run monthly curator (last day of month only)
+      if: steps.check-dates.outputs.is_last_day_of_month == 'true'
+      run: |
+        python monthly_curator.py
+        
+    - name: Upload generated images
+      uses: actions/upload-artifact@v3
+      with:
+        name: generated-content-${{ github.run_number }}
+        path: |
+          images/
+          captions/
+          weekly_curated/
+          monthly_curated/
+        retention-days: 30
+        
+    - name: Commit and push generated content
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add images/ captions/ weekly_curated/ monthly_curated/
+        git diff --quiet && git diff --staged --quiet || git commit -m "Auto-generated content - ${{ github.run_number }}"
+        git push
+        
+    - name: Create summary
+      run: |
+        echo "## Content Generation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Generated:** $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ✅ Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Generated Content:" >> $GITHUB_STEP_SUMMARY
+        if [ -d "images" ]; then
+          echo "- **Daily Images:** $(find images -name "*.jpg" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ -d "captions" ]; then
+          echo "- **Captions:** $(find captions -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ -d "weekly_curated" ]; then
+          echo "- **Weekly PDFs:** $(find weekly_curated -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+          echo "- **Weekly Summaries:** $(find weekly_curated -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ -d "monthly_curated" ]; then
+          echo "- **Monthly PDFs:** $(find monthly_curated -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+          echo "- **Monthly Summaries:** $(find monthly_curated -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ "$(date +%u)" = "4" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**🎉 Weekly curation completed!**" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ "$(date +%d)" = "$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**📚 Monthly curation completed!**" >> $GITHUB_STEP_SUMMARY
+        fi 
