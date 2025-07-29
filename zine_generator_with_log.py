@@ -92,8 +92,8 @@ API_BASES = {
     "together": get_env("TOGETHER_API_BASE", "https://api.together.xyz/v1")
 }
 API_KEYS = {
-    "groq": get_env("GROQ_API_KEY"),
-    "together": get_env("TOGETHER_API_KEY", required=True)
+    "groq": get_env("GROQ_API_KEY", required=True),
+    "together": get_env("TOGETHER_API_KEY")
 }
 
 HEADERS = {
