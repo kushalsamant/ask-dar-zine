@@ -99,7 +99,6 @@ jobs:
         python daily_instagram_poster.py
         python daily_twitter_poster.py
         python daily_linkedin_poster.py
-        python daily_patreon_poster.py
         
     - name: Run weekly curator (Weekends only)
       if: steps.check-dates.outputs.is_weekend == 'true'
@@ -116,26 +115,23 @@ jobs:
       run: |
         python yearly_curator.py
         
-    - name: Run social media posting (daily)
-      run: |
-        python social_media_poster.py
+
         
     - name: Upload generated images
       uses: actions/upload-artifact@v3
       with:
         name: generated-content-${{ github.run_number }}
-                             path: |
-                       images/
-                       captions/
-                       digital_pdfs/
-                       patreon_posts/
+        path: |
+          images/
+          captions/
+          digital_pdfs/
         retention-days: 14
         
     - name: Commit and push generated content
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-                             git add images/ captions/ digital_pdfs/ patreon_posts/
+        git add images/ captions/ digital_pdfs/
         git diff --quiet && git diff --staged --quiet || git commit -m "Auto-generated content - ${{ github.run_number }}"
         git push
         
@@ -154,9 +150,7 @@ jobs:
                              if [ -d "captions" ]; then
                        echo "- **Captions:** $(find captions -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
                      fi
-                     if [ -d "patreon_posts" ]; then
-                       echo "- **Patreon Posts:** $(find patreon_posts -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
-                     fi
+
         if [ -d "digital_pdfs" ]; then
           echo "- **Digital PDFs:** $(find digital_pdfs -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi

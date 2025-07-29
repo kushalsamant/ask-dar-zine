@@ -477,6 +477,90 @@ def get_theme():
         return theme
     return get_theme_from_rss()
 
+# === 🧠 LLM Integration ===
+def call_llm(messages, max_retries=3):
+    """Call LLM with retry logic and error handling"""
+    for attempt in range(max_retries):
+        try:
+            # Rate limiting
+            rate_limiter.wait_if_needed()
+            
+            response = requests.post(
+                TEXT_API_URL,
+                headers=HEADERS,
+                json={
+                    "model": TEXT_MODEL,
+                    "messages": messages,
+                    "max_tokens": 500,
+                    "temperature": 0.7
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                content = data['choices'][0]['message']['content'].strip()
+                log.info(f"✅ LLM call successful (attempt {attempt + 1})")
+                return content
+            elif response.status_code == 429:
+                log.warning(f"⚠️ Rate limited (attempt {attempt + 1}), waiting...")
+                time.sleep(60)  # Wait 1 minute for rate limit
+            elif response.status_code == 500:
+                log.warning(f"⚠️ Server error (attempt {attempt + 1}), retrying...")
+                time.sleep(5)
+            else:
+                log.error(f"❌ API error {response.status_code}: {response.text}")
+                if attempt < max_retries - 1:
+                    time.sleep(5)
+                    
+        except requests.exceptions.Timeout:
+            log.warning(f"⚠️ LLM timeout (attempt {attempt + 1})")
+            if attempt < max_retries - 1:
+                time.sleep(5)
+        except Exception as e:
+            log.error(f"❌ LLM call failed (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(5)
+    
+    log.error("❌ All LLM attempts failed")
+    return None
+
+def validate_caption(caption_text):
+    """Validate and format caption to ensure 6 lines of 6 words each"""
+    try:
+        lines = [line.strip() for line in caption_text.split('\n') if line.strip()]
+        
+        # If we have exactly 6 lines, validate each
+        if len(lines) == 6:
+            validated_lines = []
+            for line in lines:
+                words = line.split()
+                if len(words) == 6:
+                    validated_lines.append(' '.join(words))
+                else:
+                    # Pad or truncate to 6 words
+                    if len(words) < 6:
+                        words.extend(['space'] * (6 - len(words)))
+                    else:
+                        words = words[:6]
+                    validated_lines.append(' '.join(words))
+            return '\n'.join(validated_lines)
+        
+        # If not 6 lines, create a simple 6x6 caption
+        fallback_caption = [
+            "Architecture speaks through silent spaces",
+            "Form follows function in perfect harmony",
+            "Light dances across geometric surfaces",
+            "Human scale meets monumental vision",
+            "Materials tell stories of creation",
+            "Space becomes poetry in motion"
+        ]
+        return '\n'.join(fallback_caption)
+        
+    except Exception as e:
+        log.warning(f"⚠️ Caption validation failed: {e}")
+        return "Architecture speaks through silent spaces\n" * 6
+
 # === 🧠 Enhanced Prompt Generation ===
 def generate_prompts_and_captions(theme):
     """Generate optimized prompts and captions with better content quality"""
@@ -565,97 +649,74 @@ Generate the caption:"""
 # === 🎨 STEP 3: Generate images with different styles ===
 # === 🎨 Image Generation ===
 def generate_single_image(args):
-    """Generate a single image with retry logic and memory optimization"""
+    """Generate a single image with retry logic and memory optimization (TEST MODE - SKIPS REPLICATE)"""
     prompt, style_name, i, style_config = args
     
-    max_retries = MAX_RETRIES
-    retry_delay = 2
+    log.info(f"🧪 TEST MODE: Simulating {style_name} image {i+1} generation")
     
-    for attempt in range(max_retries):
+    # Create directory structure
+    style_dir = os.path.join("images", style_name)
+    os.makedirs(style_dir, exist_ok=True)
+    
+    # Simulate image generation (skip Replicate API call)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
+    image_path = os.path.join(style_dir, image_filename)
+    
+    # Create a dummy image file for testing
+    try:
+        # Create a simple test image using PIL
+        from PIL import Image, ImageDraw, ImageFont
+        import random
+        
+        # Create a test image with the style name and prompt
+        img = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        draw = ImageDraw.Draw(img)
+        
+        # Add text to the image
         try:
-            # Rate limiting
-            rate_limiter.wait_if_needed()
-            
-            log.info(f"🎨 Generating {style_name} image {i+1} (attempt {attempt + 1}/{max_retries})")
-            
-            # Combine the architectural prompt with the style prompt
-            full_prompt = f"{prompt}, {style_config['prompt_suffix']}"
-            
-            # Call Replicate API
-            output = replicate.run(style_config["model"], input={
-                "prompt": full_prompt,
-                "width": IMAGE_WIDTH,
-                "height": IMAGE_HEIGHT,
-                "num_inference_steps": NUM_STEPS,
-                "guidance_scale": GUIDANCE_SCALE,
-                "negative_prompt": style_config["negative_prompt"]
-            })
-            
-            if not output:
-                raise Exception("Replicate returned empty output")
-            
-            image_url = output[0] if isinstance(output, list) else output
-            
-            if not image_url:
-                raise Exception("No image URL in output")
-            
-            # Create directory structure
-            style_dir = os.path.join("images", style_name)
-            os.makedirs(style_dir, exist_ok=True)
-            
-            # Download and save image locally with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
-            image_path = os.path.join(style_dir, image_filename)
-            
-            # Download image with memory optimization and timeout
-            log.info(f"📥 Downloading image: {image_filename}")
-            resp = requests.get(image_url, stream=True, timeout=30)
-            resp.raise_for_status()
-            
-            # Save image in chunks to optimize memory
-            with open(image_path, 'wb') as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:  # Filter out keep-alive chunks
-                        f.write(chunk)
-            
-            # Clear response from memory immediately
-            resp.close()
-            
-            # Verify file was created and has content
-            if not os.path.exists(image_path) or os.path.getsize(image_path) == 0:
-                raise Exception(f"Failed to save image: {image_path}")
-            
-            # Log image details
-            image_log_file = os.path.join(style_dir, f"{style_name}_image_log.txt")
-            with open(image_log_file, 'a', encoding='utf-8') as log_file:
-                log_file.write(f"Image {i+1}: {image_filename}\n")
-                log_file.write(f"Prompt: {prompt}\n")
-                log_file.write(f"Full Prompt: {full_prompt}\n")
-                log_file.write(f"URL: {image_url}\n")
-                log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                log_file.write(f"File Size: {os.path.getsize(image_path)} bytes\n")
-                log_file.write("-" * 80 + "\n")
-            
-            log.info(f"✅ Generated {style_name} image {i+1}: {image_filename} ({os.path.getsize(image_path)} bytes)")
-            return image_url, image_path
-            
-        except requests.exceptions.Timeout:
-            log.warning(f"⚠️ Image generation timeout (attempt {attempt + 1})")
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay * (attempt + 1))
-        except requests.exceptions.RequestException as e:
-            log.error(f"❌ Network error (attempt {attempt + 1}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay * (attempt + 1))
-        except Exception as e:
-            log.error(f"❌ Image generation failed (attempt {attempt + 1}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay * (attempt + 1))
-    
-    # All retries failed
-    log.error(f"❌ Failed to generate {style_name} image {i+1} after {max_retries} attempts")
-    return None, None
+            # Try to use a default font
+            font = ImageFont.load_default()
+        except:
+            font = None
+        
+        # Add style name and prompt info
+        text_lines = [
+            f"TEST IMAGE - {style_name.upper()}",
+            f"Prompt: {prompt[:50]}...",
+            f"Generated: {timestamp}",
+            "REPLICATE SKIPPED FOR TESTING"
+        ]
+        
+        y_position = 50
+        for line in text_lines:
+            if font:
+                draw.text((50, y_position), line, fill=(255, 255, 255), font=font)
+            else:
+                draw.text((50, y_position), line, fill=(255, 255, 255))
+            y_position += 30
+        
+        # Save the test image
+        img.save(image_path, 'JPEG', quality=85)
+        
+        # Log image details
+        image_log_file = os.path.join(style_dir, f"{style_name}_image_log.txt")
+        with open(image_log_file, 'a', encoding='utf-8') as log_file:
+            log_file.write(f"Image {i+1}: {image_filename}\n")
+            log_file.write(f"Prompt: {prompt}\n")
+            log_file.write(f"Full Prompt: {prompt}, {style_config['prompt_suffix']}\n")
+            log_file.write(f"URL: TEST_MODE_NO_URL\n")
+            log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            log_file.write(f"File Size: {os.path.getsize(image_path)} bytes\n")
+            log_file.write(f"Status: TEST_MODE_SIMULATED\n")
+            log_file.write("-" * 80 + "\n")
+        
+        log.info(f"✅ TEST MODE: Generated {style_name} image {i+1}: {image_filename} ({os.path.getsize(image_path)} bytes)")
+        return f"test_url_{image_filename}", image_path
+        
+    except Exception as e:
+        log.error(f"❌ TEST MODE: Failed to create test image: {e}")
+        return None, None
 
 def generate_images_with_style(prompts, style_name):
     """Generate images for a specific style with parallel processing"""

@@ -83,10 +83,9 @@ def get_env(var, default=None, required=False):
 # === 📊 Allocation Configuration ===
 DAILY_IMAGES_PER_DAY = 10  # Total images generated daily (10 social only)
 ALLOCATION_RATIO = {
-    'instagram': 0.30,  # 3 images (30%) - for Instagram
+    'instagram': 0.40,  # 4 images (40%) - for Instagram
     'twitter': 0.30,    # 3 images (30%) - for Twitter
-    'linkedin': 0.20,   # 2 images (20%) - for LinkedIn
-    'patreon': 0.20     # 2 images (20%) - for Patreon
+    'linkedin': 0.30    # 3 images (30%) - for LinkedIn
 }
 
 def get_allocation_counts():
@@ -118,7 +117,7 @@ def load_allocation_state():
                 state = json.load(f)
                 
             # Validate state structure
-            required_keys = ['instagram_pool', 'twitter_pool', 'linkedin_pool', 'patreon_pool', 'used_images', 'last_updated']
+            required_keys = ['instagram_pool', 'twitter_pool', 'linkedin_pool', 'used_images', 'last_updated']
             for key in required_keys:
                 if key not in state:
                     log.warning(f"⚠️ Missing key in state file: {key}")
@@ -142,7 +141,6 @@ def load_allocation_state():
         'instagram_pool': [],
         'twitter_pool': [],
         'linkedin_pool': [],
-        'patreon_pool': [],
         'used_images': set(),
         'last_updated': datetime.now().isoformat()
     }
@@ -311,7 +309,7 @@ def create_allocation_summary(state):
         
         f.write("Current Pool Status:\n")
         f.write("-" * 30 + "\n")
-        for platform in ['instagram', 'twitter', 'linkedin', 'patreon']:
+        for platform in ['instagram', 'twitter', 'linkedin']:
             pool_key = f'{platform}_pool'
             count = len(state.get(pool_key, []))
             f.write(f"{platform.capitalize():10s}: {count:3d} images\n")
@@ -372,11 +370,11 @@ def main():
         create_allocation_summary(state)
         
         log.info("=== Image Allocation Complete ===")
-        log.info(f"✅ Allocated {len(todays_images)} images across 4 pools")
+        log.info(f"✅ Allocated {len(todays_images)} images across 3 pools")
         log.info(f"📊 Pool status:")
-        for period in ['daily', 'weekly', 'monthly', 'yearly']:
-            count = len(state[f'{period}_pool'])
-            log.info(f"  {period.capitalize()}: {count} images")
+        for platform in ['instagram', 'twitter', 'linkedin']:
+            count = len(state.get(f'{platform}_pool', []))
+            log.info(f"  {platform.capitalize()}: {count} images")
         
     except Exception as e:
         log.error(f"❌ Image allocator failed: {e}")
