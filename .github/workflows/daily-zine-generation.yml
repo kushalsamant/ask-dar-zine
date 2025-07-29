@@ -61,11 +61,11 @@ jobs:
     - name: Check day and month for curation
       id: check-dates
       run: |
-        # Check if it's Thursday (for weekly curation)
-        if [ "$(date +%u)" = "4" ]; then
-          echo "is_thursday=true" >> $GITHUB_OUTPUT
+        # Check if it's weekend (Saturday or Sunday for weekly curation)
+        if [ "$(date +%u)" = "6" ] || [ "$(date +%u)" = "7" ]; then
+          echo "is_weekend=true" >> $GITHUB_OUTPUT
         else
-          echo "is_thursday=false" >> $GITHUB_OUTPUT
+          echo "is_weekend=false" >> $GITHUB_OUTPUT
         fi
         
         # Check if it's the last day of the month (for monthly curation)
@@ -77,12 +77,32 @@ jobs:
           echo "is_last_day_of_month=false" >> $GITHUB_OUTPUT
         fi
         
+        # Check if it's the last day of the year (for yearly curation)
+        current_month=$(date +%m)
+        current_day=$(date +%d)
+        if [ "$current_month" = "12" ] && [ "$current_day" = "31" ]; then
+          echo "is_last_day_of_year=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_last_day_of_year=false" >> $GITHUB_OUTPUT
+        fi
+        
     - name: Run daily image generation
       run: |
         python zine_generator_multi_style.py
         
-    - name: Run weekly curator (Thursdays only)
-      if: steps.check-dates.outputs.is_thursday == 'true'
+    - name: Run image allocation
+      run: |
+        python image_allocator.py
+        
+    - name: Run daily social media posting
+      run: |
+        python daily_instagram_poster.py
+        python daily_twitter_poster.py
+        python daily_linkedin_poster.py
+        python daily_patreon_poster.py
+        
+    - name: Run weekly curator (Weekends only)
+      if: steps.check-dates.outputs.is_weekend == 'true'
       run: |
         python weekly_curator.py
         
@@ -90,6 +110,11 @@ jobs:
       if: steps.check-dates.outputs.is_last_day_of_month == 'true'
       run: |
         python monthly_curator.py
+        
+    - name: Run yearly curator (last day of year only)
+      if: steps.check-dates.outputs.is_last_day_of_year == 'true'
+      run: |
+        python yearly_curator.py
         
     - name: Run social media posting (daily)
       run: |
@@ -99,18 +124,18 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: generated-content-${{ github.run_number }}
-        path: |
-          images/
-          captions/
-          weekly_curated/
-          monthly_curated/
-        retention-days: 30
+                             path: |
+                       images/
+                       captions/
+                       digital_pdfs/
+                       patreon_posts/
+        retention-days: 14
         
     - name: Commit and push generated content
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add images/ captions/ weekly_curated/ monthly_curated/
+                             git add images/ captions/ digital_pdfs/ patreon_posts/
         git diff --quiet && git diff --staged --quiet || git commit -m "Auto-generated content - ${{ github.run_number }}"
         git push
         
@@ -126,22 +151,24 @@ jobs:
         if [ -d "images" ]; then
           echo "- **Daily Images:** $(find images -name "*.jpg" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
-        if [ -d "captions" ]; then
-          echo "- **Captions:** $(find captions -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+                             if [ -d "captions" ]; then
+                       echo "- **Captions:** $(find captions -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+                     fi
+                     if [ -d "patreon_posts" ]; then
+                       echo "- **Patreon Posts:** $(find patreon_posts -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+                     fi
+        if [ -d "digital_pdfs" ]; then
+          echo "- **Digital PDFs:** $(find digital_pdfs -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
-        if [ -d "weekly_curated" ]; then
-          echo "- **Weekly PDFs:** $(find weekly_curated -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
-          echo "- **Weekly Summaries:** $(find weekly_curated -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
-        fi
-        if [ -d "monthly_curated" ]; then
-          echo "- **Monthly PDFs:** $(find monthly_curated -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
-          echo "- **Monthly Summaries:** $(find monthly_curated -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
-        fi
-        if [ "$(date +%u)" = "4" ]; then
+        if [ "$(date +%u)" = "6" ] || [ "$(date +%u)" = "7" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**🎉 Weekly curation completed!**" >> $GITHUB_STEP_SUMMARY
         fi
         if [ "$(date +%d)" = "$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**📚 Monthly curation completed!**" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ "$(date +%m)" = "12" ] && [ "$(date +%d)" = "31" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**📅 Yearly curation completed!**" >> $GITHUB_STEP_SUMMARY
         fi 

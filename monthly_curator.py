@@ -94,9 +94,31 @@ def get_month_range():
     return first_day, last_day
 
 def collect_monthly_images():
-    """Collect all images generated in the current month"""
-    first_day, last_day = get_month_range()
-    log.info(f"Collecting images from {first_day.strftime('%Y-%m-%d')} to {last_day.strftime('%Y-%m-%d')}")
+    """Collect images from the monthly pool using the allocator"""
+    try:
+        from image_allocator import load_allocation_state, get_images_for_period
+        
+        # Load allocation state
+        state = load_allocation_state()
+        
+        # Get images from monthly pool (need 32 for monthly PDF)
+        monthly_images = get_images_for_period('monthly', 32, state)
+        
+        # Save updated state
+        from image_allocator import save_allocation_state
+        save_allocation_state(state)
+        
+        log.info(f"Collected {len(monthly_images)} images from monthly pool")
+        return monthly_images
+        
+    except ImportError:
+        log.warning("Image allocator not available, falling back to old method")
+        return collect_monthly_images_fallback()
+
+def collect_monthly_images_fallback():
+    """Fallback method: collect images from the past month"""
+    month_start, month_end = get_month_range()
+    log.info(f"Collecting images from {month_start.strftime('%Y-%m-%d')} to {month_end.strftime('%Y-%m-%d')}")
     
     all_images = []
     images_dir = Path("images")
@@ -120,13 +142,12 @@ def collect_monthly_images():
                         image_date = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
                         
                         # Check if image is from this month
-                        if first_day <= image_date <= last_day:
+                        if month_start <= image_date <= month_end:
                             all_images.append({
                                 'path': image_file,
                                 'style': style_dir.name,
                                 'date': image_date,
-                                'filename': image_file.name,
-                                'day_of_month': image_date.day
+                                'filename': image_file.name
                             })
                             log.info(f"Found monthly image: {image_file.name}")
                 except Exception as e:
@@ -230,46 +251,32 @@ def place_caption(c, cap, pos, w, h):
         for i, line in enumerate(text):
             c.drawCentredString(w / 2, start_y - i * CAPTION_LINE_SPACING, line)
 
-def create_monthly_volumes(style_groups):
-    """Create print-optimized monthly volumes instead of one bulky PDF"""
+def create_monthly_pdf(style_groups):
+    """Create monthly PDF for digital sales"""
     try:
-        from print_volume_optimizer import PrintVolumeOptimizer
+        from digital_pdf_creator import DigitalPDFCreator
         
-        optimizer = PrintVolumeOptimizer()
+        creator = DigitalPDFCreator()
         
-        # Flatten all images into a single list
+        # Flatten all images into a single list with captions
         all_images = []
+        all_captions = []
         for style, images in style_groups.items():
             for image in images:
                 image['style'] = style  # Ensure style is set
                 all_images.append(image)
+                # Generate caption for this image
+                caption = generate_monthly_captions(image, len(images), len(all_images))
+                all_captions.append(caption)
         
-        # Calculate optimal volume distribution
-        total_images = len(all_images)
-        volumes = optimizer.calculate_optimal_volumes(total_images, 'monthly')
+        pdf_path = creator.create_monthly_pdf(all_images, all_captions)
         
-        log.info(f"📚 Creating {len(volumes)} monthly volumes from {total_images} images...")
-        
-        created_files = []
-        
-        for volume in volumes:
-            # Select images for this volume
-            start_idx = volume['start_index']
-            end_idx = min(volume['end_index'], len(all_images) - 1)
-            
-            volume_images = all_images[start_idx:end_idx + 1]
-            
-            # Create volume PDF
-            output_path = optimizer.create_volume_pdf(volume_images, volume, 'monthly')
-            created_files.append(output_path)
-            
-            log.info(f"✅ Volume {volume['volume_number']}: {volume['image_count']} images, {volume['page_count']} pages")
-        
-        return created_files
+        log.info(f"✅ Created monthly PDF: {pdf_path}")
+        return pdf_path
         
     except ImportError:
-        log.warning("Print volume optimizer not available, falling back to single PDF")
-        return [create_monthly_pdf_fallback(style_groups)]
+        log.warning("Digital PDF creator not available, falling back to basic PDF")
+        return create_monthly_pdf_fallback(style_groups)
 
 def create_monthly_pdf_fallback(style_groups):
     """Fallback: Create single monthly PDF if volume optimizer is not available"""
@@ -427,16 +434,14 @@ def main():
             log.warning("No style groups created")
             return
         
-        # Create monthly volumes
-        volume_paths = create_monthly_volumes(style_groups)
+        # Create monthly PDF
+        pdf_path = create_monthly_pdf(style_groups)
         
         # Create summary
         create_monthly_summary(style_groups)
         
         log.info("=== Monthly Curator Complete ===")
-        log.info(f"✅ Created {len(volume_paths)} volumes:")
-        for path in volume_paths:
-            log.info(f"   📄 {path}")
+        log.info(f"✅ Created monthly PDF: {pdf_path}")
         log.info(f"📊 Organized {sum(len(images) for images in style_groups.values())} images into {len(style_groups)} styles")
         
     except Exception as e:

@@ -7,26 +7,32 @@ from datetime import datetime
 import concurrent.futures
 import threading
 from queue import Queue
+import traceback
+
+# === 🔧 Setup logging with better configuration ===
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 log_filename = os.path.join(LOG_DIR, f"multi_style_zine_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+
+# Configure logging with better formatting
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.FileHandler(log_filename, mode='w', encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 
 # === 🛠️ Auto-install missing dependencies ===
 REQUIRED_LIBS = [
     'python-dotenv', 'replicate', 'reportlab',
-    'feedparser', 'requests', 'Pillow'
+    'feedparser', 'requests', 'Pillow', 'beautifulsoup4'
 ]
 
 def install_missing_libs():
+    """Install missing dependencies with better error handling"""
     missing_libs = []
     for lib in REQUIRED_LIBS:
         try:
@@ -43,38 +49,58 @@ def install_missing_libs():
         log.info(f"Installing missing dependencies: {', '.join(missing_libs)}")
         for lib in missing_libs:
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
-                log.info(f"Installed: {lib}")
+                subprocess.check_call([sys.executable, "-m", "pip", "install", lib], 
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                log.info(f"✅ Installed: {lib}")
             except subprocess.CalledProcessError as e:
-                log.error(f"Failed to install {lib}: {e}")
+                log.error(f"❌ Failed to install {lib}: {e}")
                 sys.exit(1)
     else:
-        log.info("All dependencies are already installed")
+        log.info("✅ All dependencies are already installed")
 
 install_missing_libs()
 
 # === Now import everything ===
-import replicate, requests, feedparser
-from dotenv import load_dotenv
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
-from PIL import Image
-from io import BytesIO
-import random
+try:
+    import replicate
+    import requests
+    import feedparser
+    from dotenv import load_dotenv
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from PIL import Image
+    from io import BytesIO
+    import random
+    log.info("✅ All imports successful")
+except ImportError as e:
+    log.error(f"❌ Import error: {e}")
+    sys.exit(1)
+
+# === Web scraping imports ===
+try:
+    from web_scraper import WebScraper
+    from date_filter import DateFilter
+    WEB_SCRAPING_AVAILABLE = True
+    log.info("✅ Web scraping modules available")
+except ImportError as e:
+    log.warning(f"⚠️ Web scraping modules not available: {e}")
+    log.info("🔄 Using fallback theme generation")
+    WEB_SCRAPING_AVAILABLE = False
 
 # === 📥 Load environment variables ===
 load_dotenv('ask.env')
 
 # === 📌 Environment config ===
 def get_env(var, default=None, required=False):
+    """Get environment variable with better error handling"""
     value = os.getenv(var, default)
     if required and not value:
-        log.error(f"Required environment variable '{var}' is missing. Exiting.")
+        log.error(f"❌ Required environment variable '{var}' is missing. Exiting.")
         sys.exit(1)
     return value
 
-# Rate limiting for API calls
+# === 🚦 Rate limiting for API calls ===
 class RateLimiter:
     def __init__(self, max_calls_per_minute=30):
         self.max_calls = max_calls_per_minute
@@ -82,6 +108,7 @@ class RateLimiter:
         self.lock = threading.Lock()
     
     def wait_if_needed(self):
+        """Wait if rate limit is reached"""
         with self.lock:
             now = time.time()
             # Remove calls older than 1 minute
@@ -96,70 +123,70 @@ class RateLimiter:
             
             self.calls.append(time.time())
 
+# === 🎨 Style Models Configuration ===
+STYLE_MODELS = {
+    'futuristic': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', futuristic sci-fi style, neon colors, advanced technology, cyberpunk aesthetic',
+        'negative_prompt': 'cartoon, anime, sketch, watercolor, traditional art, vintage'
+    },
+    'minimalist': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', minimalist design, clean lines, simple composition, modern aesthetic',
+        'negative_prompt': 'complex, cluttered, detailed, ornate, busy'
+    },
+    'sketch': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', pencil sketch style, hand-drawn, artistic line work, monochrome',
+        'negative_prompt': 'colorful, digital art, 3d render, photorealistic'
+    },
+    'abstract': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', abstract art style, geometric shapes, vibrant colors, modern art',
+        'negative_prompt': 'realistic, photorealistic, traditional, representational'
+    },
+    'technical': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', technical drawing style, blueprint aesthetic, engineering diagrams, precise lines',
+        'negative_prompt': 'artistic, abstract, colorful, organic shapes'
+    },
+    'watercolor': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', watercolor painting style, soft edges, flowing colors, artistic',
+        'negative_prompt': 'digital art, sharp edges, geometric, technical'
+    },
+    'anime': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', anime style, Japanese animation, vibrant colors, stylized characters',
+        'negative_prompt': 'realistic, photorealistic, western animation, 3d'
+    },
+    'photorealistic': {
+        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'prompt_suffix': ', photorealistic style, high detail, realistic lighting, professional photography',
+        'negative_prompt': 'cartoon, anime, abstract, artistic, stylized'
+    }
+}
+
+# === 🔧 Performance and Configuration Settings ===
+TEXT_PROVIDER = get_env("TEXT_PROVIDER", "groq")
+TEXT_MODEL = get_env("TEXT_MODEL", required=True)
+IMAGE_WIDTH = int(get_env("IMAGE_WIDTH", "2048"))
+IMAGE_HEIGHT = int(get_env("IMAGE_HEIGHT", "1024"))
+IMAGE_DPI = int(get_env("IMAGE_DPI", "300"))
+CAPTION_FONT_SIZE = int(get_env("CAPTION_FONT_SIZE", "14"))
+CAPTION_LINE_SPACING = int(get_env("CAPTION_LINE_SPACING", "18"))
+CAPTION_POSITION = get_env("CAPTION_POSITION", "top-right")
+NUM_STEPS = int(get_env("NUM_INFERENCE_STEPS", "30"))
+GUIDANCE_SCALE = float(get_env("GUIDANCE_SCALE", "7.5"))
+FILTER_KEYWORDS = [kw.strip() for kw in get_env("FILTER_KEYWORDS", "").split(",") if kw.strip()]
+
 # Performance settings
 MAX_CONCURRENT_IMAGES = int(get_env("MAX_CONCURRENT_IMAGES", "4"))
 MAX_RETRIES = int(get_env("MAX_RETRIES", "3"))
 RATE_LIMIT_PER_MINUTE = int(get_env("RATE_LIMIT_PER_MINUTE", "30"))
 
-# Global rate limiter
-rate_limiter = RateLimiter(max_calls_per_minute=RATE_LIMIT_PER_MINUTE)
-
-TEXT_PROVIDER = get_env("TEXT_PROVIDER", "groq")
-TEXT_MODEL = get_env("TEXT_MODEL", required=True)
-NUM_SPREADS = int(get_env("NUM_SPREADS", "10"))
-FILTER_KEYWORDS = [kw.strip() for kw in get_env("FILTER_KEYWORDS", "").split(",") if kw.strip()]
-IMAGE_WIDTH = int(get_env("IMAGE_WIDTH", "1024"))
-IMAGE_HEIGHT = int(get_env("IMAGE_HEIGHT", "1024"))
-IMAGE_DPI = int(get_env("IMAGE_DPI", "300"))
-CAPTION_POSITION = get_env("CAPTION_POSITION", "bottom")
-NUM_STEPS = int(get_env("NUM_INFERENCE_STEPS", "30"))
-GUIDANCE_SCALE = float(get_env("GUIDANCE_SCALE", "7.5"))
-TITLE_TEMPLATE = get_env("ZINE_TITLE_TEMPLATE", "ASK Volume {theme}")
-OUTPUT_PATH = get_env("OUTPUT_PATH", "output")
-
-# === 🎨 Multi-Style Image Generation Models ===
-STYLE_MODELS = {
-    "photorealistic": {
-        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-        "style_prompt": "photorealistic architectural photography, high resolution, professional lighting",
-        "description": "Photorealistic architectural photography"
-    },
-    "anime": {
-        "model": "cjwbw/anything-v3-better-vae:09a5805203f4c12da649ec1923e9dafc1e7d0aed5e2d0c35a658ac25f4f4d1b8",
-        "style_prompt": "anime style, architectural illustration, vibrant colors, detailed linework",
-        "description": "Anime-style architectural illustrations"
-    },
-    "watercolor": {
-        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-        "style_prompt": "watercolor painting style, architectural art, soft colors, artistic interpretation",
-        "description": "Watercolor architectural paintings"
-    },
-    "technical": {
-        "model": "jagilley/controlnet-scribble:435061a1b5a4c1e26740464bf786efdfa9cb3a3ac488595a2de23e143fdb0117",
-        "style_prompt": "technical architectural drawing, blueprint style, precise lines, engineering diagram",
-        "description": "Technical architectural drawings"
-    },
-    "abstract": {
-        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-        "style_prompt": "abstract architectural art, geometric forms, modern art style, conceptual design",
-        "description": "Abstract architectural art"
-    },
-    "sketch": {
-        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-        "style_prompt": "architectural sketch, hand-drawn style, pencil drawing, artistic sketch",
-        "description": "Hand-drawn architectural sketches"
-    },
-    "minimalist": {
-        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-        "style_prompt": "minimalist architectural design, clean lines, simple forms, modern minimalism",
-        "description": "Minimalist architectural design"
-    },
-    "futuristic": {
-        "model": "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
-        "style_prompt": "futuristic architecture, sci-fi design, advanced technology, cyberpunk style",
-        "description": "Futuristic architectural concepts"
-    }
-}
+# Initialize rate limiter
+rate_limiter = RateLimiter(RATE_LIMIT_PER_MINUTE)
 
 # === API Keys and Endpoints ===
 API_BASES = {
@@ -177,150 +204,366 @@ HEADERS = {
 }
 TEXT_API_URL = f"{API_BASES[TEXT_PROVIDER]}/chat/completions"
 
-# === 🌐 STEP 1: Get theme from RSS or CLI ===
-def get_theme_from_rss():
-    urls = [u.strip() for u in get_env("RSS_FEEDS", "").split(",") if u.strip()]
-    headlines = []
-    for url in urls:
-        try:
-            feed = feedparser.parse(url)
-            for e in feed.entries:
-                t = e.title.strip()
-                if t and (not FILTER_KEYWORDS or any(kw.lower() in t.lower() for kw in FILTER_KEYWORDS)):
-                    headlines.append(t)
-        except Exception as e:
-            log.warning(f"RSS failed for {url}: {e}")
-    return random.choice(headlines) if headlines else get_env("FALLBACK_THEME", "Architecture & AI")
+# === 🌐 Dynamic RSS Source Management ===
+RSS_SOURCES = {
+    'tech': {
+        'TechCrunch': 'https://techcrunch.com/feed/',
+        'Ars Technica': 'https://feeds.arstechnica.com/arstechnica/index',
+        'The Verge': 'https://www.theverge.com/rss/index.xml',
+        'Wired': 'https://www.wired.com/feed/rss',
+        'MIT Technology Review': 'https://www.technologyreview.com/feed/',
+        'IEEE Spectrum': 'https://spectrum.ieee.org/rss/fulltext',
+        'VentureBeat': 'https://venturebeat.com/feed/',
+        'TechRadar': 'https://www.techradar.com/rss',
+        'Engadget': 'https://www.engadget.com/rss.xml',
+        'Gizmodo': 'https://gizmodo.com/rss'
+    },
+    'science': {
+        'Nature': 'https://www.nature.com/nature.rss',
+        'Science': 'https://www.science.org/rss/news_current.xml',
+        'Scientific American': 'https://rss.sciam.com/ScientificAmerican-Global',
+        'Science Daily': 'https://www.sciencedaily.com/rss/all.xml',
+        'New Scientist': 'https://www.newscientist.com/feed/home/?cmpid=RSS',
+        'Popular Science': 'https://www.popsci.com/rss.xml',
+        'Science News': 'https://www.sciencenews.org/feed',
+        'Quanta Magazine': 'https://www.quantamagazine.org/feed/',
+        'Physics World': 'https://physicsworld.com/feed/',
+        'Chemistry World': 'https://www.chemistryworld.com/rss'
+    },
+    'architecture': {
+        'ArchDaily': 'https://www.archdaily.com/rss',
+        'Dezeen': 'https://www.dezeen.com/feed/',
+        'Architectural Digest': 'https://www.architecturaldigest.com/rss.xml',
+        'Architect Magazine': 'https://www.architectmagazine.com/rss',
+        'Architecture Now': 'https://architecturenow.co.nz/feed/',
+        'Architectural Review': 'https://www.architectural-review.com/rss',
+        'Architecture Lab': 'https://www.architecturelab.net/feed/',
+        'Architecture & Design': 'https://www.architectureanddesign.com.au/rss',
+        'Architectural Record': 'https://www.architecturalrecord.com/rss',
+        'Architectural Digest India': 'https://www.architecturaldigest.in/rss'
+    },
+    'innovation': {
+        'Fast Company': 'https://www.fastcompany.com/feed',
+        'Harvard Business Review': 'https://hbr.org/feed',
+        'MIT Sloan Management Review': 'https://sloanreview.mit.edu/feed/',
+        'Innovation Excellence': 'https://www.innovationexcellence.com/feed/',
+        'Innovation Management': 'https://innovationmanagement.se/feed/',
+        'Stanford Social Innovation Review': 'https://ssir.org/rss',
+        'Innovation Leader': 'https://www.innovationleader.com/feed/',
+        'Innovation Enterprise': 'https://channels.theinnovationenterprise.com/rss',
+        'Innovation Excellence': 'https://www.innovationexcellence.com/feed/',
+        'Innovation Management': 'https://innovationmanagement.se/feed/'
+    }
+}
 
-def get_theme():
-    if len(sys.argv) > 1:
-        return ' '.join(sys.argv[1:])
-    return get_theme_from_rss()
-
-# === 🧠 STEP 2: Prompt + Caption generation ===
-def call_llm(messages):
+def get_best_rss_sources(category='tech', max_sources=5):
+    """Dynamically select the best RSS sources based on availability and content quality"""
     try:
-        # Add small delay to avoid rate limiting
-        time.sleep(1)
+        available_sources = {}
+        category_sources = RSS_SOURCES.get(category, RSS_SOURCES['tech'])
         
-        response = requests.post(TEXT_API_URL, headers=HEADERS, json={
-            "model": TEXT_MODEL,
-            "messages": messages
-        })
-        result = response.json()
+        log.info(f"🔍 Testing {len(category_sources)} RSS sources for category: {category}")
         
-        if response.status_code != 200:
-            log.error(f"API Error: {result}")
-            raise Exception(f"API returned status {response.status_code}: {result}")
+        for source_name, url in category_sources.items():
+            try:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    feed = feedparser.parse(response.content)
+                    if feed.entries and len(feed.entries) > 0:
+                        # Calculate source quality score
+                        quality_score = calculate_source_quality(feed)
+                        available_sources[source_name] = {
+                            'url': url,
+                            'quality_score': quality_score,
+                            'entry_count': len(feed.entries),
+                            'latest_update': get_latest_entry_date(feed)
+                        }
+                        log.info(f"✅ {source_name}: {quality_score:.2f} quality score, {len(feed.entries)} entries")
+                    else:
+                        log.warning(f"⚠️ {source_name}: No entries found")
+                else:
+                    log.warning(f"⚠️ {source_name}: HTTP {response.status_code}")
+            except Exception as e:
+                log.warning(f"⚠️ {source_name}: {e}")
+        
+        # Sort by quality score and select top sources
+        sorted_sources = sorted(available_sources.items(), 
+                              key=lambda x: x[1]['quality_score'], reverse=True)
+        
+        selected_sources = sorted_sources[:max_sources]
+        
+        log.info(f"🎯 Selected top {len(selected_sources)} sources:")
+        for source_name, info in selected_sources:
+            log.info(f"  📡 {source_name}: {info['quality_score']:.2f} score")
+        
+        return [info['url'] for _, info in selected_sources]
+        
+    except Exception as e:
+        log.error(f"❌ Error selecting RSS sources: {e}")
+        # Fallback to default sources
+        return list(RSS_SOURCES['tech'].values())[:max_sources]
+
+def calculate_source_quality(feed):
+    """Calculate quality score for RSS source based on content analysis"""
+    try:
+        score = 0.0
+        entries = feed.entries[:20]  # Analyze first 20 entries
+        
+        if not entries:
+            return 0.0
+        
+        # Content length analysis
+        avg_title_length = sum(len(entry.title) for entry in entries) / len(entries)
+        if 20 <= avg_title_length <= 100:
+            score += 0.3
+        
+        # Content freshness
+        recent_entries = 0
+        for entry in entries:
+            if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                pub_date = datetime(*entry.published_parsed[:6])
+                if (datetime.now() - pub_date).days <= 7:
+                    recent_entries += 1
+        
+        freshness_ratio = recent_entries / len(entries)
+        score += freshness_ratio * 0.4
+        
+        # Content diversity (avoid duplicate titles)
+        titles = [entry.title.lower() for entry in entries]
+        unique_titles = len(set(titles))
+        diversity_ratio = unique_titles / len(titles)
+        score += diversity_ratio * 0.3
+        
+        return min(score, 1.0)
+        
+    except Exception as e:
+        log.warning(f"⚠️ Error calculating source quality: {e}")
+        return 0.5
+
+def get_latest_entry_date(feed):
+    """Get the date of the latest entry in the feed"""
+    try:
+        for entry in feed.entries:
+            if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                return datetime(*entry.published_parsed[:6])
+        return datetime.now()
+    except:
+        return datetime.now()
+
+def get_theme_from_rss():
+    """Get theme from dynamic RSS sources with better content selection"""
+    try:
+        # Select best sources for current run
+        category = random.choice(['tech', 'science', 'architecture', 'innovation'])
+        rss_urls = get_best_rss_sources(category, max_sources=3)
+        
+        headlines = []
+        source_quality = {}
+        
+        for url in rss_urls:
+            try:
+                log.info(f"📡 Fetching RSS feed: {url}")
+                response = requests.get(url, timeout=15)
+                response.raise_for_status()
+                
+                feed = feedparser.parse(response.content)
+                
+                for entry in feed.entries[:10]:  # Get top 10 entries
+                    title = entry.title.strip()
+                    
+                    # Enhanced content filtering
+                    if is_quality_headline(title, category):
+                        headlines.append({
+                            'title': title,
+                            'source': feed.feed.get('title', 'Unknown'),
+                            'url': entry.get('link', ''),
+                            'category': category,
+                            'quality_score': calculate_headline_quality(title, category)
+                        })
+                        
+            except Exception as e:
+                log.warning(f"⚠️ RSS failed for {url}: {e}")
+                continue
+        
+        if headlines:
+            # Sort by quality score and select best headline
+            headlines.sort(key=lambda x: x['quality_score'], reverse=True)
+            selected = headlines[0]
             
-        # Handle different response formats
-        if 'choices' in result and len(result['choices']) > 0:
-            return result['choices'][0]['message']['content']
-        elif 'output' in result:
-            return result['output']
-        elif 'text' in result:
-            return result['text']
+            log.info(f"🎯 Selected theme: {selected['title'][:50]}...")
+            log.info(f"📊 Quality score: {selected['quality_score']:.2f}")
+            log.info(f"📡 Source: {selected['source']}")
+            
+            return selected['title']
         else:
-            raise Exception(f"Unexpected response format: {result}")
+            fallback_theme = get_env("FALLBACK_THEME", "Architecture & AI")
+            log.info(f"🔄 Using fallback theme: {fallback_theme}")
+            return fallback_theme
             
     except Exception as e:
-        log.error(f"LLM call failed: {e}")
-        raise e
+        log.error(f"❌ Error in RSS theme generation: {e}")
+        fallback_theme = get_env("FALLBACK_THEME", "Architecture & AI")
+        log.info(f"🔄 Using fallback theme: {fallback_theme}")
+        return fallback_theme
 
-def validate_caption(caption):
-    """Validate and fix caption to ensure 6 lines of 6 words each"""
-    lines = [line.strip() for line in caption.split('\n') if line.strip()]
+def is_quality_headline(title, category):
+    """Check if headline meets quality criteria"""
+    if not title or len(title) < 10:
+        return False
     
-    # If we don't have exactly 6 lines, try to fix it
-    if len(lines) != 6:
-        # Split by periods or other punctuation if needed
-        if len(lines) == 1:
-            # Single line - try to split into 6 parts
-            words = lines[0].split()
-            if len(words) >= 36:
-                lines = []
-                for i in range(6):
-                    start = i * 6
-                    end = start + 6
-                    lines.append(' '.join(words[start:end]))
-            else:
-                # Pad with meaningful text
-                while len(lines) < 6:
-                    lines.append("Architecture speaks through silent spaces")
-    
-    # Ensure each line has exactly 6 words
-    fixed_lines = []
-    for line in lines[:6]:  # Take only first 6 lines
-        words = line.split()
-        if len(words) > 6:
-            words = words[:6]
-        elif len(words) < 6:
-            # Pad with meaningful words
-            padding = ["in", "the", "space", "between", "dreams", "reality"]
-            while len(words) < 6:
-                words.append(padding[len(words) % len(padding)])
-        fixed_lines.append(' '.join(words))
-    
-    # Ensure we have exactly 6 lines
-    while len(fixed_lines) < 6:
-        fixed_lines.append("Architecture speaks through silent spaces")
-    
-    return '\n'.join(fixed_lines[:6])
-
-def generate_prompts_and_captions(theme):
-    prompts_msg = [
-        {"role": "system", "content": get_env("PROMPT_SYSTEM", "You are a visionary architectural writer and provocateur. You create compelling, artistic image prompts that capture the essence of architectural concepts with vivid, poetic language.")},
-        {"role": "user", "content": get_env("PROMPT_TEMPLATE", "Generate {n} architectural image prompts on theme: '{theme}'. Each prompt should be a single, evocative line that describes a visual scene with artistic flair. Focus on mood, atmosphere, and architectural poetry. Do not include explanations or numbered lists - just the prompts, one per line.").format(n=NUM_SPREADS, theme=theme)}
+    # Filter out common low-quality patterns
+    low_quality_patterns = [
+        'breaking news', 'just in', 'update', 'alert', 'urgent',
+        'exclusive', 'shocking', 'amazing', 'incredible', 'unbelievable'
     ]
-    raw = call_llm(prompts_msg)
     
-    if not raw or raw.strip() == "":
-        raise Exception("LLM returned empty response for prompts")
+    title_lower = title.lower()
+    for pattern in low_quality_patterns:
+        if pattern in title_lower:
+            return False
     
-    # Parse prompts more robustly
-    lines = [line.strip() for line in raw.split('\n') if line.strip()]
-    prompts = []
+    # Category-specific filtering
+    if category == 'tech':
+        tech_keywords = ['ai', 'artificial intelligence', 'machine learning', 'technology', 'innovation', 'startup', 'software', 'hardware', 'digital', 'cyber']
+        return any(keyword in title_lower for keyword in tech_keywords)
+    elif category == 'science':
+        science_keywords = ['research', 'study', 'discovery', 'scientific', 'experiment', 'analysis', 'finding', 'breakthrough']
+        return any(keyword in title_lower for keyword in science_keywords)
+    elif category == 'architecture':
+        arch_keywords = ['architecture', 'design', 'building', 'construction', 'urban', 'sustainable', 'modern', 'traditional', 'space', 'structure']
+        return any(keyword in title_lower for keyword in arch_keywords)
+    elif category == 'innovation':
+        innovation_keywords = ['innovation', 'creative', 'solution', 'problem', 'challenge', 'future', 'next generation', 'revolutionary']
+        return any(keyword in title_lower for keyword in innovation_keywords)
     
-    for line in lines:
-        # Remove numbering and common prefixes
-        cleaned = line.strip("1234567890. -•*")
-        if cleaned and len(cleaned) > 10:  # Ensure it's a meaningful prompt
-            prompts.append(cleaned)
+    return True
+
+def calculate_headline_quality(title, category):
+    """Calculate quality score for individual headline"""
+    score = 0.0
     
-    # If we still don't have enough, try to split longer responses
-    if len(prompts) < NUM_SPREADS and len(lines) > 0:
-        # Try to split by common separators
-        for line in lines:
-            if ',' in line or ';' in line:
-                parts = line.replace(',', '\n').replace(';', '\n').split('\n')
-                for part in parts:
-                    cleaned = part.strip("1234567890. -•*")
-                    if cleaned and len(cleaned) > 10 and len(prompts) < NUM_SPREADS:
-                        prompts.append(cleaned)
+    # Length score (prefer medium-length titles)
+    length = len(title)
+    if 20 <= length <= 80:
+        score += 0.3
+    elif 10 <= length <= 120:
+        score += 0.2
     
-    if len(prompts) < NUM_SPREADS:
-        log.warning(f"LLM only generated {len(prompts)} prompts, need {NUM_SPREADS}. Raw response: {raw[:200]}...")
-        # Pad with variations of the theme
-        while len(prompts) < NUM_SPREADS:
-            prompts.append(f"Architectural interpretation of {theme} with artistic vision")
+    # Complexity score (prefer substantive content)
+    words = title.split()
+    if 4 <= len(words) <= 12:
+        score += 0.3
     
-    captions = []
-    for prompt in prompts:
-        cap_msg = [
-            {"role": "system", "content": get_env("CAPTION_SYSTEM", "You are a masterful architectural poet and critic. You write profound, artistic captions that capture the deeper meaning and emotional resonance of architectural spaces.")},
-            {"role": "user", "content": get_env("CAPTION_TEMPLATE", "Write exactly 6 lines, each containing exactly 6 words, that form a complete, meaningful caption for this architectural image: {prompt}. Each line should be a complete thought with poetic depth. The entire caption should tell a coherent story that reveals the architectural philosophy, emotional impact, and cultural significance of the space.").format(prompt=prompt)}
+    # Category relevance score
+    category_keywords = {
+        'tech': ['ai', 'technology', 'digital', 'innovation', 'software', 'hardware'],
+        'science': ['research', 'study', 'discovery', 'scientific', 'analysis'],
+        'architecture': ['architecture', 'design', 'building', 'space', 'structure'],
+        'innovation': ['innovation', 'creative', 'solution', 'future', 'revolutionary']
+    }
+    
+    title_lower = title.lower()
+    keywords = category_keywords.get(category, [])
+    keyword_matches = sum(1 for keyword in keywords if keyword in title_lower)
+    score += (keyword_matches / len(keywords)) * 0.4
+    
+    return min(score, 1.0)
+
+def get_theme():
+    """Get theme from command line or dynamic RSS"""
+    if len(sys.argv) > 1:
+        theme = ' '.join(sys.argv[1:])
+        log.info(f"🎯 Using command line theme: {theme}")
+        return theme
+    return get_theme_from_rss()
+
+# === 🧠 Enhanced Prompt Generation ===
+def generate_prompts_and_captions(theme):
+    """Generate optimized prompts and captions with better content quality"""
+    try:
+        # Enhanced prompt generation with context
+        prompts_msg = [
+            {
+                "role": "system", 
+                "content": """You are a visionary architectural artist and conceptual designer. You create compelling, artistic image prompts that capture the essence of architectural concepts with vivid, poetic language. Focus on:
+
+1. **Visual Poetry**: Create prompts that evoke strong visual imagery
+2. **Architectural Depth**: Incorporate spatial relationships, materials, and form
+3. **Emotional Resonance**: Connect architecture to human experience
+4. **Innovation**: Blend traditional and futuristic elements
+5. **Atmospheric Quality**: Consider lighting, mood, and environmental context
+
+Your prompts should be single, evocative sentences that describe architectural scenes with artistic flair."""
+            },
+            {
+                "role": "user", 
+                "content": f"""Generate exactly 1 architectural image prompt on theme: '{theme}'.
+
+Requirements:
+- Single, evocative sentence (20-40 words)
+- Focus on visual impact and architectural poetry
+- Include specific architectural elements (materials, forms, spaces)
+- Consider lighting, atmosphere, and mood
+- Blend innovation with timeless design principles
+
+Theme Context: {theme}
+
+Generate the prompt:"""
+            }
         ]
-        raw_caption = call_llm(cap_msg)
         
-        if not raw_caption or raw_caption.strip() == "":
-            raise Exception(f"LLM returned empty response for caption: {prompt[:50]}...")
-            
-        validated_caption = validate_caption(raw_caption)
-        captions.append(validated_caption)
-        log.info(f"Generated caption for '{prompt[:50]}...': {len(validated_caption.split('\n'))} lines")
-    return prompts, captions
+        prompts_response = call_llm(prompts_msg)
+        prompts = [line.strip() for line in prompts_response.split('\n') if line.strip()]
+        
+        # Ensure we have enough prompts
+        if len(prompts) < 1:
+            log.warning(f"⚠️ Only {len(prompts)} prompts generated, using fallback")
+            prompts = [f"Architectural concept exploring {theme} with artistic vision and spatial poetry"]
+        
+        # Enhanced caption generation
+        captions_msg = [
+            {
+                "role": "system", 
+                "content": """You are a masterful architectural poet and critic. Create exactly 6 lines of exactly 6 words each that form a complete, meaningful caption for architectural imagery. Each line should be a complete thought with poetic depth. The entire caption should tell a coherent story that reveals the architectural philosophy, emotional impact, and cultural significance of the space.
+
+Focus on:
+1. **Spatial Poetry**: How space affects human experience
+2. **Material Language**: The story of materials and construction
+3. **Cultural Context**: Architecture's role in society
+4. **Emotional Journey**: The feelings evoked by the space
+5. **Philosophical Depth**: Deeper meaning of architectural choices
+6. **Visual Narrative**: Telling a story through built form"""
+            },
+            {
+                "role": "user", 
+                "content": f"""Create a 6-line caption (6 words per line) for an architectural image about: {theme}
+
+Each line must be exactly 6 words and form a complete thought. The caption should tell a story about the architectural concept, its meaning, and its impact on human experience.
+
+Theme: {theme}
+
+Generate the caption:"""
+            }
+        ]
+        
+        captions_response = call_llm(captions_msg)
+        caption = validate_caption(captions_response)
+        
+        log.info(f"✅ Generated {len(prompts)} prompts and 1 caption")
+        return prompts, [caption]  # Return list of captions for consistency
+        
+    except Exception as e:
+        log.error(f"❌ Failed to generate prompts/captions: {e}")
+        log.info("🔄 Using fallback prompts and captions")
+        
+        # Enhanced fallback prompts and captions
+        fallback_prompts = [f"Architectural concept exploring {theme} with artistic vision and spatial poetry"]
+        fallback_caption = "Architecture speaks through silent spaces\n" * 6
+        
+        return fallback_prompts, [fallback_caption]
 
 # === 🎨 STEP 3: Generate images with different styles ===
+# === 🎨 Image Generation ===
 def generate_single_image(args):
     """Generate a single image with retry logic and memory optimization"""
     prompt, style_name, i, style_config = args
@@ -333,95 +576,123 @@ def generate_single_image(args):
             # Rate limiting
             rate_limiter.wait_if_needed()
             
-            # Combine the architectural prompt with the style prompt
-            full_prompt = f"{prompt}, {style_config['style_prompt']}"
+            log.info(f"🎨 Generating {style_name} image {i+1} (attempt {attempt + 1}/{max_retries})")
             
+            # Combine the architectural prompt with the style prompt
+            full_prompt = f"{prompt}, {style_config['prompt_suffix']}"
+            
+            # Call Replicate API
             output = replicate.run(style_config["model"], input={
                 "prompt": full_prompt,
                 "width": IMAGE_WIDTH,
                 "height": IMAGE_HEIGHT,
                 "num_inference_steps": NUM_STEPS,
-                "guidance_scale": GUIDANCE_SCALE
+                "guidance_scale": GUIDANCE_SCALE,
+                "negative_prompt": style_config["negative_prompt"]
             })
             
+            if not output:
+                raise Exception("Replicate returned empty output")
+            
             image_url = output[0] if isinstance(output, list) else output
+            
+            if not image_url:
+                raise Exception("No image URL in output")
+            
+            # Create directory structure
+            style_dir = os.path.join("images", style_name)
+            os.makedirs(style_dir, exist_ok=True)
             
             # Download and save image locally with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
-            image_path = os.path.join("images", style_name, image_filename)
+            image_path = os.path.join(style_dir, image_filename)
             
-            # Download image with memory optimization
-            resp = requests.get(image_url, stream=True)
+            # Download image with memory optimization and timeout
+            log.info(f"📥 Downloading image: {image_filename}")
+            resp = requests.get(image_url, stream=True, timeout=30)
             resp.raise_for_status()
             
+            # Save image in chunks to optimize memory
             with open(image_path, 'wb') as f:
                 for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                    if chunk:  # Filter out keep-alive chunks
+                        f.write(chunk)
             
             # Clear response from memory immediately
             resp.close()
             
+            # Verify file was created and has content
+            if not os.path.exists(image_path) or os.path.getsize(image_path) == 0:
+                raise Exception(f"Failed to save image: {image_path}")
+            
             # Log image details
-            image_log_file = os.path.join("images", style_name, f"{style_name}_image_log.txt")
+            image_log_file = os.path.join(style_dir, f"{style_name}_image_log.txt")
             with open(image_log_file, 'a', encoding='utf-8') as log_file:
                 log_file.write(f"Image {i+1}: {image_filename}\n")
                 log_file.write(f"Prompt: {prompt}\n")
                 log_file.write(f"Full Prompt: {full_prompt}\n")
                 log_file.write(f"URL: {image_url}\n")
                 log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                log_file.write(f"File Size: {os.path.getsize(image_path)} bytes\n")
                 log_file.write("-" * 80 + "\n")
             
-            log.info(f"✅ Generated {style_name} image {i+1}: {image_filename}")
+            log.info(f"✅ Generated {style_name} image {i+1}: {image_filename} ({os.path.getsize(image_path)} bytes)")
             return image_url, image_path
             
-        except Exception as e:
-            log.warning(f"Attempt {attempt + 1} failed for {style_name} image {i+1}: {e}")
+        except requests.exceptions.Timeout:
+            log.warning(f"⚠️ Image generation timeout (attempt {attempt + 1})")
             if attempt < max_retries - 1:
-                time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
-            else:
-                log.error(f"❌ Failed to generate {style_name} image {i+1} after {max_retries} attempts")
-                return None, None
+                time.sleep(retry_delay * (attempt + 1))
+        except requests.exceptions.RequestException as e:
+            log.error(f"❌ Network error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (attempt + 1))
+        except Exception as e:
+            log.error(f"❌ Image generation failed (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (attempt + 1))
     
+    # All retries failed
+    log.error(f"❌ Failed to generate {style_name} image {i+1} after {max_retries} attempts")
     return None, None
 
 def generate_images_with_style(prompts, style_name):
-    """Generate images in parallel with better error handling"""
-    images = []
-    image_paths = []
-    style_config = STYLE_MODELS[style_name]
-    
-    # Create images directory for this style
-    images_dir = os.path.join("images", style_name)
-    os.makedirs(images_dir, exist_ok=True)
-    
-    log.info(f"🚀 Generating {len(prompts)} images with {style_name} style: {style_config['description']}")
-    
-    # Prepare arguments for parallel processing
-    args_list = [(prompt, style_name, i, style_config) for i, prompt in enumerate(prompts)]
-    
-    # Use ThreadPoolExecutor for parallel processing
-    max_workers = min(MAX_CONCURRENT_IMAGES, len(prompts))  # Limit concurrent requests
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks
-        future_to_index = {executor.submit(generate_single_image, args): i for i, args in enumerate(args_list)}
+    """Generate images for a specific style with parallel processing"""
+    try:
+        style_config = STYLE_MODELS.get(style_name)
+        if not style_config:
+            log.error(f"❌ Unknown style: {style_name}")
+            return [], [], []
         
-        # Collect results as they complete
-        for future in concurrent.futures.as_completed(future_to_index):
-            index = future_to_index[future]
-            try:
-                image_url, image_path = future.result()
-                images.append(image_url)
-                image_paths.append(image_path)
-            except Exception as e:
-                log.error(f"❌ Exception in parallel processing for image {index + 1}: {e}")
-                images.append(None)
-                image_paths.append(None)
-    
-    successful_images = sum(1 for img in images if img is not None)
-    log.info(f"✅ {style_name} style complete: {successful_images}/{len(prompts)} images generated successfully")
-    
-    return images, image_paths
+        log.info(f"🎨 Starting {style_name} image generation...")
+        
+        # Prepare arguments for parallel processing
+        args_list = [(prompt, style_name, i, style_config) for i, prompt in enumerate(prompts)]
+        
+        # Generate images with parallel processing
+        images = []
+        image_paths = []
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_IMAGES) as executor:
+            future_to_prompt = {executor.submit(generate_single_image, args): args for args in args_list}
+            
+            for future in concurrent.futures.as_completed(future_to_prompt):
+                args = future_to_prompt[future]
+                try:
+                    image_url, image_path = future.result()
+                    if image_url and image_path:
+                        images.append(image_url)
+                        image_paths.append(image_path)
+                except Exception as e:
+                    log.error(f"❌ Failed to generate image for {args[1]}: {e}")
+        
+        log.info(f"✅ {style_name} generation complete: {len(images)}/{len(prompts)} images")
+        return images, image_paths, prompts
+        
+    except Exception as e:
+        log.error(f"❌ Failed to generate {style_name} images: {e}")
+        return [], [], []
 
 # === 🖼️ STEP 4: Place captions ===
 def place_caption(c, cap, pos, w, h):
@@ -540,7 +811,7 @@ def generate_images_for_style(theme, style_name):
         log.info(f"Generated {len(prompts)} prompts and captions for {style_name} style")
         
         # Generate images with the specific style
-        images, image_paths = generate_images_with_style(prompts, style_name)
+        images, image_paths, prompts = generate_images_with_style(prompts, style_name)
         log.info(f"Generated {len(images)} images for {style_name} style")
         
         # Store captions for later use in weekly/monthly PDFs
@@ -560,51 +831,115 @@ def generate_images_for_style(theme, style_name):
 
 def main():
     start_time = time.time()
-    theme = get_theme()
+    
+    # Initialize web scraping if available
+    if WEB_SCRAPING_AVAILABLE:
+        log.info("🌐 Initializing web scraping...")
+        try:
+            scraper = WebScraper()
+            scraper.run_daily_scraping()
+            date_filter = DateFilter()
+            log.info("✅ Web scraping completed")
+        except Exception as e:
+            log.error(f"❌ Web scraping failed: {e}")
+            log.info("🔄 Falling back to RSS theme generation")
+            theme = get_theme()
+    else:
+        theme = get_theme()
+    
+    # Get topics from web scraping or fallback
+    if WEB_SCRAPING_AVAILABLE:
+        try:
+            # Get 10 unique topics for daily generation (10 social only, no daily PDF)
+            topics = date_filter.get_unused_topics('daily', 10)
+            if len(topics) >= 10:
+                log.info(f"🎯 Using {len(topics)} scraped topics for daily generation")
+                theme = topics[0]  # Use first topic as main theme
+            else:
+                log.warning(f"⚠️ Only {len(topics)} topics available, using fallback")
+                theme = get_theme()
+        except Exception as e:
+            log.error(f"❌ Topic extraction failed: {e}")
+            theme = get_theme()
+    else:
+        theme = get_theme()
+    
     log.info(f"🎯 Theme selected: {theme}")
     
-    # Generate images for all styles (no PDFs)
+    # Generate 10 images daily (10 for social media only, no daily PDF)
+    # Distribute across 8 styles to ensure variety
+    images_per_style = 10 // 8  # 1 image per style
+    remaining_images = 10 % 8   # 2 extra images to distribute
+    
     generated_images = []
-    total_styles = len(STYLE_MODELS)
+    total_images_generated = 0
     
-    log.info(f"🚀 Starting generation for {total_styles} styles...")
+    log.info(f"🚀 Starting daily generation: 10 images across 8 styles...")
     
-    for i, style_name in enumerate(STYLE_MODELS.keys(), 1):
+    style_names = list(STYLE_MODELS.keys())
+    
+    # Generate base images (1 per style)
+    for i, style_name in enumerate(style_names):
         style_start_time = time.time()
-        log.info(f"📊 Progress: {i}/{total_styles} - {style_name.upper()}")
+        log.info(f"📊 Progress: {i+1}/8 - {style_name.upper()}")
         
         try:
+            # Generate 1 image for this style
             images, image_paths, captions = generate_images_for_style(theme, style_name)
-            if images:
-                successful_count = sum(1 for img in images if img is not None)
-                generated_images.append((style_name, successful_count))
+            if images and len(images) >= 1:
+                generated_images.append((style_name, 1))
+                total_images_generated += 1
                 style_time = time.time() - style_start_time
-                log.info(f"✅ {style_name.upper()} complete: {successful_count} images in {style_time:.1f}s")
+                log.info(f"✅ {style_name.upper()} complete: 1 image in {style_time:.1f}s")
             else:
                 log.error(f"❌ {style_name.upper()}: No images generated")
         except Exception as e:
             log.error(f"❌ Failed to generate {style_name} images: {e}")
             continue
     
+    # Generate remaining 2 images (distribute across first 2 styles)
+    for i in range(remaining_images):
+        if i < len(style_names):
+            style_name = style_names[i]
+            style_start_time = time.time()
+            log.info(f"📊 Extra image {i+1}/2 - {style_name.upper()}")
+            
+            try:
+                # Generate 1 extra image for this style
+                images, image_paths, captions = generate_images_for_style(theme, style_name)
+                if images and len(images) >= 1:
+                    # Update count for this style
+                    for j, (existing_style, count) in enumerate(generated_images):
+                        if existing_style == style_name:
+                            generated_images[j] = (style_name, count + 1)
+                            break
+                    total_images_generated += 1
+                    style_time = time.time() - style_start_time
+                    log.info(f"✅ {style_name.upper()} extra image complete in {style_time:.1f}s")
+                else:
+                    log.error(f"❌ {style_name.upper()}: Extra image failed")
+            except Exception as e:
+                log.error(f"❌ Failed to generate extra {style_name} image: {e}")
+                continue
+    
     # Summary
     total_time = time.time() - start_time
-    log.info(f"🎉 === IMAGE GENERATION COMPLETE ===")
+    log.info(f"🎉 === DAILY SOCIAL MEDIA GENERATION COMPLETE ===")
     log.info(f"⏱️  Total time: {total_time:.1f} seconds")
-    log.info(f"📊 Successfully generated images for {len(generated_images)}/{total_styles} styles:")
+    log.info(f"📊 Successfully generated images for {len(generated_images)}/8 styles:")
     
-    total_images = 0
     for style_name, count in generated_images:
         log.info(f"✅ {style_name.upper()}: {count} images")
-        total_images += count
     
     if not generated_images:
         log.error("❌ No images were generated successfully")
     else:
-        avg_time_per_image = total_time / total_images if total_images > 0 else 0
-        log.info(f"🎉 Image generation complete! {total_images} total images across {len(generated_images)} styles.")
+        avg_time_per_image = total_time / total_images_generated if total_images_generated > 0 else 0
+        log.info(f"🎉 Daily generation complete! {total_images_generated} total images.")
         log.info(f"📈 Average time per image: {avg_time_per_image:.1f}s")
         log.info(f"📁 Images saved to: images/")
         log.info(f"📝 Captions saved to: captions/")
+        log.info(f"📄 10 images allocated for social media only")
         log.info(f"📄 PDFs will be created by weekly/monthly curators")
 
 if __name__ == "__main__":
