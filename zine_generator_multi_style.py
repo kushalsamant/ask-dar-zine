@@ -4,8 +4,9 @@ import subprocess
 import logging
 import time
 from datetime import datetime
-
-# === 🔧 Setup real-time logging ===
+import concurrent.futures
+import threading
+from queue import Queue
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 log_filename = os.path.join(LOG_DIR, f"multi_style_zine_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
@@ -72,6 +73,36 @@ def get_env(var, default=None, required=False):
         log.error(f"Required environment variable '{var}' is missing. Exiting.")
         sys.exit(1)
     return value
+
+# Rate limiting for API calls
+class RateLimiter:
+    def __init__(self, max_calls_per_minute=30):
+        self.max_calls = max_calls_per_minute
+        self.calls = []
+        self.lock = threading.Lock()
+    
+    def wait_if_needed(self):
+        with self.lock:
+            now = time.time()
+            # Remove calls older than 1 minute
+            self.calls = [call_time for call_time in self.calls if now - call_time < 60]
+            
+            if len(self.calls) >= self.max_calls:
+                # Wait until we can make another call
+                sleep_time = 60 - (now - self.calls[0])
+                if sleep_time > 0:
+                    log.info(f"⏳ Rate limit reached, waiting {sleep_time:.1f}s")
+                    time.sleep(sleep_time)
+            
+            self.calls.append(time.time())
+
+# Performance settings
+MAX_CONCURRENT_IMAGES = int(get_env("MAX_CONCURRENT_IMAGES", "4"))
+MAX_RETRIES = int(get_env("MAX_RETRIES", "3"))
+RATE_LIMIT_PER_MINUTE = int(get_env("RATE_LIMIT_PER_MINUTE", "30"))
+
+# Global rate limiter
+rate_limiter = RateLimiter(max_calls_per_minute=RATE_LIMIT_PER_MINUTE)
 
 TEXT_PROVIDER = get_env("TEXT_PROVIDER", "groq")
 TEXT_MODEL = get_env("TEXT_MODEL", required=True)
@@ -290,28 +321,22 @@ def generate_prompts_and_captions(theme):
     return prompts, captions
 
 # === 🎨 STEP 3: Generate images with different styles ===
-def generate_images_with_style(prompts, style_name):
-    images = []
-    image_paths = []
-    style_config = STYLE_MODELS[style_name]
-    model_ref = style_config["model"]
-    style_prompt = style_config["style_prompt"]
+def generate_single_image(args):
+    """Generate a single image with retry logic and memory optimization"""
+    prompt, style_name, i, style_config = args
     
-    # Create images directory for this style
-    images_dir = os.path.join("images", style_name)
-    os.makedirs(images_dir, exist_ok=True)
+    max_retries = MAX_RETRIES
+    retry_delay = 2
     
-    # Create image log file
-    image_log_file = os.path.join(images_dir, f"{style_name}_image_log.txt")
-    
-    log.info(f"Generating images with {style_name} style: {style_config['description']}")
-    
-    for i, prompt in enumerate(prompts):
+    for attempt in range(max_retries):
         try:
-            # Combine the architectural prompt with the style prompt
-            full_prompt = f"{prompt}, {style_prompt}"
+            # Rate limiting
+            rate_limiter.wait_if_needed()
             
-            output = replicate.run(model_ref, input={
+            # Combine the architectural prompt with the style prompt
+            full_prompt = f"{prompt}, {style_config['style_prompt']}"
+            
+            output = replicate.run(style_config["model"], input={
                 "prompt": full_prompt,
                 "width": IMAGE_WIDTH,
                 "height": IMAGE_HEIGHT,
@@ -324,13 +349,21 @@ def generate_images_with_style(prompts, style_name):
             # Download and save image locally with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
-            image_path = os.path.join(images_dir, image_filename)
+            image_path = os.path.join("images", style_name, image_filename)
             
-            resp = requests.get(image_url)
+            # Download image with memory optimization
+            resp = requests.get(image_url, stream=True)
+            resp.raise_for_status()
+            
             with open(image_path, 'wb') as f:
-                f.write(resp.content)
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            # Clear response from memory immediately
+            resp.close()
             
             # Log image details
+            image_log_file = os.path.join("images", style_name, f"{style_name}_image_log.txt")
             with open(image_log_file, 'a', encoding='utf-8') as log_file:
                 log_file.write(f"Image {i+1}: {image_filename}\n")
                 log_file.write(f"Prompt: {prompt}\n")
@@ -339,14 +372,54 @@ def generate_images_with_style(prompts, style_name):
                 log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 log_file.write("-" * 80 + "\n")
             
-            images.append(image_url)  # Keep URL for compatibility
-            image_paths.append(image_path)
-            log.info(f"Generated and saved {style_name} image {i+1}/{len(prompts)}: {image_path}")
+            log.info(f"✅ Generated {style_name} image {i+1}: {image_filename}")
+            return image_url, image_path
             
         except Exception as e:
-            log.error(f"Image gen failed for {style_name} style, prompt '{prompt}': {e}")
-            images.append(None)
-            image_paths.append(None)
+            log.warning(f"Attempt {attempt + 1} failed for {style_name} image {i+1}: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+            else:
+                log.error(f"❌ Failed to generate {style_name} image {i+1} after {max_retries} attempts")
+                return None, None
+    
+    return None, None
+
+def generate_images_with_style(prompts, style_name):
+    """Generate images in parallel with better error handling"""
+    images = []
+    image_paths = []
+    style_config = STYLE_MODELS[style_name]
+    
+    # Create images directory for this style
+    images_dir = os.path.join("images", style_name)
+    os.makedirs(images_dir, exist_ok=True)
+    
+    log.info(f"🚀 Generating {len(prompts)} images with {style_name} style: {style_config['description']}")
+    
+    # Prepare arguments for parallel processing
+    args_list = [(prompt, style_name, i, style_config) for i, prompt in enumerate(prompts)]
+    
+    # Use ThreadPoolExecutor for parallel processing
+    max_workers = min(MAX_CONCURRENT_IMAGES, len(prompts))  # Limit concurrent requests
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_index = {executor.submit(generate_single_image, args): i for i, args in enumerate(args_list)}
+        
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(future_to_index):
+            index = future_to_index[future]
+            try:
+                image_url, image_path = future.result()
+                images.append(image_url)
+                image_paths.append(image_path)
+            except Exception as e:
+                log.error(f"❌ Exception in parallel processing for image {index + 1}: {e}")
+                images.append(None)
+                image_paths.append(None)
+    
+    successful_images = sum(1 for img in images if img is not None)
+    log.info(f"✅ {style_name} style complete: {successful_images}/{len(prompts)} images generated successfully")
     
     return images, image_paths
 
@@ -486,24 +559,39 @@ def generate_images_for_style(theme, style_name):
         return None, None, None
 
 def main():
+    start_time = time.time()
     theme = get_theme()
-    log.info(f"Theme selected: {theme}")
+    log.info(f"🎯 Theme selected: {theme}")
     
     # Generate images for all styles (no PDFs)
     generated_images = []
+    total_styles = len(STYLE_MODELS)
     
-    for style_name in STYLE_MODELS.keys():
+    log.info(f"🚀 Starting generation for {total_styles} styles...")
+    
+    for i, style_name in enumerate(STYLE_MODELS.keys(), 1):
+        style_start_time = time.time()
+        log.info(f"📊 Progress: {i}/{total_styles} - {style_name.upper()}")
+        
         try:
             images, image_paths, captions = generate_images_for_style(theme, style_name)
             if images:
-                generated_images.append((style_name, len(images)))
+                successful_count = sum(1 for img in images if img is not None)
+                generated_images.append((style_name, successful_count))
+                style_time = time.time() - style_start_time
+                log.info(f"✅ {style_name.upper()} complete: {successful_count} images in {style_time:.1f}s")
+            else:
+                log.error(f"❌ {style_name.upper()}: No images generated")
         except Exception as e:
-            log.error(f"Failed to generate {style_name} images: {e}")
+            log.error(f"❌ Failed to generate {style_name} images: {e}")
             continue
     
     # Summary
-    log.info(f"=== IMAGE GENERATION COMPLETE ===")
-    log.info(f"Successfully generated images for {len(generated_images)} styles:")
+    total_time = time.time() - start_time
+    log.info(f"🎉 === IMAGE GENERATION COMPLETE ===")
+    log.info(f"⏱️  Total time: {total_time:.1f} seconds")
+    log.info(f"📊 Successfully generated images for {len(generated_images)}/{total_styles} styles:")
+    
     total_images = 0
     for style_name, count in generated_images:
         log.info(f"✅ {style_name.upper()}: {count} images")
@@ -512,7 +600,9 @@ def main():
     if not generated_images:
         log.error("❌ No images were generated successfully")
     else:
+        avg_time_per_image = total_time / total_images if total_images > 0 else 0
         log.info(f"🎉 Image generation complete! {total_images} total images across {len(generated_images)} styles.")
+        log.info(f"📈 Average time per image: {avg_time_per_image:.1f}s")
         log.info(f"📁 Images saved to: images/")
         log.info(f"📝 Captions saved to: captions/")
         log.info(f"📄 PDFs will be created by weekly/monthly curators")

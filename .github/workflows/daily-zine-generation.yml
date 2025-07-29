@@ -91,6 +91,10 @@ jobs:
       run: |
         python monthly_curator.py
         
+    - name: Run social media posting (daily)
+      run: |
+        python social_media_poster.py
+        
     - name: Upload generated images
       uses: actions/upload-artifact@v3
       with:

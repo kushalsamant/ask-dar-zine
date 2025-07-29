@@ -230,8 +230,49 @@ def place_caption(c, cap, pos, w, h):
         for i, line in enumerate(text):
             c.drawCentredString(w / 2, start_y - i * CAPTION_LINE_SPACING, line)
 
-def create_monthly_pdf(style_groups):
-    """Create the monthly comprehensive PDF"""
+def create_monthly_volumes(style_groups):
+    """Create print-optimized monthly volumes instead of one bulky PDF"""
+    try:
+        from print_volume_optimizer import PrintVolumeOptimizer
+        
+        optimizer = PrintVolumeOptimizer()
+        
+        # Flatten all images into a single list
+        all_images = []
+        for style, images in style_groups.items():
+            for image in images:
+                image['style'] = style  # Ensure style is set
+                all_images.append(image)
+        
+        # Calculate optimal volume distribution
+        total_images = len(all_images)
+        volumes = optimizer.calculate_optimal_volumes(total_images, 'monthly')
+        
+        log.info(f"📚 Creating {len(volumes)} monthly volumes from {total_images} images...")
+        
+        created_files = []
+        
+        for volume in volumes:
+            # Select images for this volume
+            start_idx = volume['start_index']
+            end_idx = min(volume['end_index'], len(all_images) - 1)
+            
+            volume_images = all_images[start_idx:end_idx + 1]
+            
+            # Create volume PDF
+            output_path = optimizer.create_volume_pdf(volume_images, volume, 'monthly')
+            created_files.append(output_path)
+            
+            log.info(f"✅ Volume {volume['volume_number']}: {volume['image_count']} images, {volume['page_count']} pages")
+        
+        return created_files
+        
+    except ImportError:
+        log.warning("Print volume optimizer not available, falling back to single PDF")
+        return [create_monthly_pdf_fallback(style_groups)]
+
+def create_monthly_pdf_fallback(style_groups):
+    """Fallback: Create single monthly PDF if volume optimizer is not available"""
     os.makedirs(MONTHLY_OUTPUT_PATH, exist_ok=True)
     
     first_day, last_day = get_month_range()
@@ -277,7 +318,7 @@ def create_monthly_pdf(style_groups):
         
         if y_position < 100:  # Start new column
             y_position = h - 100
-            c.drawString(w/2 + 50, y_position, f"{i}. {style_name}: {len(images)} images")
+            c.drawString(w/2 + 560, y_position, f"{i}. {style_name}: {len(images)} images")
             y_position -= 25
     
     c.showPage()
@@ -386,14 +427,16 @@ def main():
             log.warning("No style groups created")
             return
         
-        # Create monthly PDF
-        pdf_path = create_monthly_pdf(style_groups)
+        # Create monthly volumes
+        volume_paths = create_monthly_volumes(style_groups)
         
         # Create summary
         create_monthly_summary(style_groups)
         
         log.info("=== Monthly Curator Complete ===")
-        log.info(f"✅ Created: {pdf_path}")
+        log.info(f"✅ Created {len(volume_paths)} volumes:")
+        for path in volume_paths:
+            log.info(f"   📄 {path}")
         log.info(f"📊 Organized {sum(len(images) for images in style_groups.values())} images into {len(style_groups)} styles")
         
     except Exception as e:

@@ -249,8 +249,43 @@ def place_caption(c, cap, pos, w, h):
         for i, line in enumerate(text):
             c.drawCentredString(w / 2, start_y - i * CAPTION_LINE_SPACING, line)
 
-def create_weekly_pdf(selected_images, captions):
-    """Create the weekly curated PDF"""
+def create_weekly_volumes(selected_images, captions):
+    """Create print-optimized weekly volumes instead of one bulky PDF"""
+    try:
+        from print_volume_optimizer import PrintVolumeOptimizer
+        
+        optimizer = PrintVolumeOptimizer()
+        
+        # Calculate optimal volume distribution
+        total_images = len(selected_images)
+        volumes = optimizer.calculate_optimal_volumes(total_images, 'weekly')
+        
+        log.info(f"📚 Creating {len(volumes)} weekly volumes from {total_images} images...")
+        
+        created_files = []
+        
+        for volume in volumes:
+            # Select images for this volume
+            start_idx = volume['start_index']
+            end_idx = min(volume['end_index'], len(selected_images) - 1)
+            
+            volume_images = selected_images[start_idx:end_idx + 1]
+            volume_captions = captions[start_idx:end_idx + 1]
+            
+            # Create volume PDF
+            output_path = optimizer.create_volume_pdf(volume_images, volume, 'weekly')
+            created_files.append(output_path)
+            
+            log.info(f"✅ Volume {volume['volume_number']}: {volume['image_count']} images, {volume['page_count']} pages")
+        
+        return created_files
+        
+    except ImportError:
+        log.warning("Print volume optimizer not available, falling back to single PDF")
+        return [create_weekly_pdf_fallback(selected_images, captions)]
+
+def create_weekly_pdf_fallback(selected_images, captions):
+    """Fallback: Create single weekly PDF if volume optimizer is not available"""
     os.makedirs(WEEKLY_OUTPUT_PATH, exist_ok=True)
     
     monday, sunday = get_week_range()
@@ -353,14 +388,16 @@ def main():
         # Generate captions
         captions = generate_weekly_captions(selected_images)
         
-        # Create weekly PDF
-        pdf_path = create_weekly_pdf(selected_images, captions)
+        # Create weekly volumes
+        volume_paths = create_weekly_volumes(selected_images, captions)
         
         # Create summary
         create_weekly_summary(selected_images)
         
         log.info("=== Weekly Curator Complete ===")
-        log.info(f"✅ Created: {pdf_path}")
+        log.info(f"✅ Created {len(volume_paths)} volumes:")
+        for path in volume_paths:
+            log.info(f"   📄 {path}")
         log.info(f"📊 Selected {len(selected_images)} images from {len(weekly_images)} candidates")
         
     except Exception as e:
