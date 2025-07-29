@@ -81,20 +81,19 @@ def get_env(var, default=None, required=False):
     return value
 
 # === 📊 Allocation Configuration ===
-DAILY_IMAGES_PER_DAY = 10  # Total images generated daily (10 social only)
+DAILY_IMAGES_PER_DAY = 10  # Total images generated daily (for PDF curation)
 ALLOCATION_RATIO = {
-    'instagram': 0.40,  # 4 images (40%) - for Instagram
-    'twitter': 0.30,    # 3 images (30%) - for Twitter
-    'linkedin': 0.30    # 3 images (30%) - for LinkedIn
+    'weekly': 0.40,   # 4 images (40%) - for weekly PDFs
+    'monthly': 0.30,  # 3 images (30%) - for monthly PDFs
+    'yearly': 0.30    # 3 images (30%) - for yearly PDFs
 }
 
 def get_allocation_counts():
-    """Get the number of images to allocate to each platform"""
+    """Get the number of images to allocate to each PDF period"""
     counts = {
-        'instagram': int(DAILY_IMAGES_PER_DAY * ALLOCATION_RATIO['instagram']),
-        'twitter': int(DAILY_IMAGES_PER_DAY * ALLOCATION_RATIO['twitter']),
-        'linkedin': int(DAILY_IMAGES_PER_DAY * ALLOCATION_RATIO['linkedin']),
-        'patreon': int(DAILY_IMAGES_PER_DAY * ALLOCATION_RATIO['patreon'])
+        'weekly': int(DAILY_IMAGES_PER_DAY * ALLOCATION_RATIO['weekly']),
+        'monthly': int(DAILY_IMAGES_PER_DAY * ALLOCATION_RATIO['monthly']),
+        'yearly': int(DAILY_IMAGES_PER_DAY * ALLOCATION_RATIO['yearly'])
     }
     
     # Ensure total adds up to DAILY_IMAGES_PER_DAY
@@ -117,7 +116,7 @@ def load_allocation_state():
                 state = json.load(f)
                 
             # Validate state structure
-            required_keys = ['instagram_pool', 'twitter_pool', 'linkedin_pool', 'used_images', 'last_updated']
+            required_keys = ['weekly_pool', 'monthly_pool', 'yearly_pool', 'used_images', 'last_updated']
             for key in required_keys:
                 if key not in state:
                     log.warning(f"⚠️ Missing key in state file: {key}")
@@ -138,9 +137,9 @@ def load_allocation_state():
     # Initialize new state
     log.info("🔄 Initializing new allocation state")
     return {
-        'instagram_pool': [],
-        'twitter_pool': [],
-        'linkedin_pool': [],
+        'weekly_pool': [],
+        'monthly_pool': [],
+        'yearly_pool': [],
         'used_images': set(),
         'last_updated': datetime.now().isoformat()
     }
@@ -237,10 +236,9 @@ def allocate_images_to_pools(todays_images, state):
     try:
         allocation_counts = get_allocation_counts()
         log.info(f"Allocating {len(todays_images)} images:")
-        log.info(f"  Instagram: {allocation_counts['instagram']}")
-        log.info(f"  Twitter: {allocation_counts['twitter']}")
-        log.info(f"  LinkedIn: {allocation_counts['linkedin']}")
-        log.info(f"  Patreon: {allocation_counts['patreon']}")
+        log.info(f"  Weekly: {allocation_counts['weekly']}")
+        log.info(f"  Monthly: {allocation_counts['monthly']}")
+        log.info(f"  Yearly: {allocation_counts['yearly']}")
         
         if len(todays_images) < DAILY_IMAGES_PER_DAY:
             log.warning(f"⚠️ Only {len(todays_images)} images available, expected {DAILY_IMAGES_PER_DAY}")
@@ -250,19 +248,19 @@ def allocate_images_to_pools(todays_images, state):
         
         # Allocate images to pools
         start_idx = 0
-        for platform, count in allocation_counts.items():
+        for period, count in allocation_counts.items():
             end_idx = start_idx + count
-            platform_images = todays_images[start_idx:end_idx]
+            period_images = todays_images[start_idx:end_idx]
             
-            # Add to platform pool
-            pool_key = f'{platform}_pool'
-            state[pool_key].extend(platform_images)
+            # Add to period pool
+            pool_key = f'{period}_pool'
+            state[pool_key].extend(period_images)
             
             # Mark as used
-            for img in platform_images:
+            for img in period_images:
                 state['used_images'].add(img['path'])
             
-            log.info(f"✅ Allocated {len(platform_images)} images to {platform}")
+            log.info(f"✅ Allocated {len(period_images)} images to {period}")
             start_idx = end_idx
         
         # Update last updated timestamp
@@ -309,16 +307,16 @@ def create_allocation_summary(state):
         
         f.write("Current Pool Status:\n")
         f.write("-" * 30 + "\n")
-        for platform in ['instagram', 'twitter', 'linkedin']:
-            pool_key = f'{platform}_pool'
+        for period in ['weekly', 'monthly', 'yearly']:
+            pool_key = f'{period}_pool'
             count = len(state.get(pool_key, []))
-            f.write(f"{platform.capitalize():10s}: {count:3d} images\n")
+            f.write(f"{period.capitalize():10s}: {count:3d} images\n")
         
         f.write("\nAllocation Strategy:\n")
         f.write("-" * 30 + "\n")
         allocation_counts = get_allocation_counts()
-        for platform, count in allocation_counts.items():
-            f.write(f"{platform.capitalize():10s}: {count:3d} images per day\n")
+        for period, count in allocation_counts.items():
+            f.write(f"{period.capitalize():10s}: {count:3d} images per day\n")
     
     log.info(f"✅ Allocation summary created: {summary_file}")
 
@@ -370,11 +368,11 @@ def main():
         create_allocation_summary(state)
         
         log.info("=== Image Allocation Complete ===")
-        log.info(f"✅ Allocated {len(todays_images)} images across 3 pools")
+        log.info(f"✅ Allocated {len(todays_images)} images across 3 PDF periods")
         log.info(f"📊 Pool status:")
-        for platform in ['instagram', 'twitter', 'linkedin']:
-            count = len(state.get(f'{platform}_pool', []))
-            log.info(f"  {platform.capitalize()}: {count} images")
+        for period in ['weekly', 'monthly', 'yearly']:
+            count = len(state.get(f'{period}_pool', []))
+            log.info(f"  {period.capitalize()}: {count} images")
         
     except Exception as e:
         log.error(f"❌ Image allocator failed: {e}")

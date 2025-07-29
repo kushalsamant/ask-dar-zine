@@ -90,15 +90,9 @@ jobs:
       run: |
         python zine_generator_multi_style.py
         
-    - name: Run image allocation
+    - name: Run image allocation for PDF curation
       run: |
         python image_allocator.py
-        
-    - name: Run daily social media posting
-      run: |
-        python daily_instagram_poster.py
-        python daily_twitter_poster.py
-        python daily_linkedin_poster.py
         
     - name: Run weekly curator (Weekends only)
       if: steps.check-dates.outputs.is_weekend == 'true'
@@ -147,22 +141,21 @@ jobs:
         if [ -d "images" ]; then
           echo "- **Daily Images:** $(find images -name "*.jpg" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
-                             if [ -d "captions" ]; then
-                       echo "- **Captions:** $(find captions -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
-                     fi
-
+                                     if [ -d "captions" ]; then
+          echo "- **Captions:** $(find captions -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+        fi
         if [ -d "digital_pdfs" ]; then
           echo "- **Digital PDFs:** $(find digital_pdfs -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
         if [ "$(date +%u)" = "6" ] || [ "$(date +%u)" = "7" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**🎉 Weekly curation completed!**" >> $GITHUB_STEP_SUMMARY
+          echo "**📚 Weekly PDF curation completed!**" >> $GITHUB_STEP_SUMMARY
         fi
         if [ "$(date +%d)" = "$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**📚 Monthly curation completed!**" >> $GITHUB_STEP_SUMMARY
+          echo "**📚 Monthly PDF curation completed!**" >> $GITHUB_STEP_SUMMARY
         fi
         if [ "$(date +%m)" = "12" ] && [ "$(date +%d)" = "31" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**📅 Yearly curation completed!**" >> $GITHUB_STEP_SUMMARY
+          echo "**📅 Yearly PDF curation completed!**" >> $GITHUB_STEP_SUMMARY
         fi 

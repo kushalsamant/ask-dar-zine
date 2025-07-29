@@ -927,7 +927,7 @@ def main():
     
     log.info(f"🎯 Theme selected: {theme}")
     
-    # Generate 10 images daily (10 for social media only, no daily PDF)
+    # Generate 10 images daily (10 for PDF curation only, no daily PDF)
     # Distribute across 8 styles to ensure variety
     images_per_style = 10 // 8  # 1 image per style
     remaining_images = 10 % 8   # 2 extra images to distribute
@@ -935,7 +935,7 @@ def main():
     generated_images = []
     total_images_generated = 0
     
-    log.info(f"🚀 Starting daily generation: 10 images across 8 styles...")
+    log.info(f"🚀 Starting daily generation: 10 images across 8 styles for PDF curation...")
     
     style_names = list(STYLE_MODELS.keys())
     
@@ -985,7 +985,7 @@ def main():
     
     # Summary
     total_time = time.time() - start_time
-    log.info(f"🎉 === DAILY SOCIAL MEDIA GENERATION COMPLETE ===")
+    log.info(f"🎉 === DAILY PDF CURATION GENERATION COMPLETE ===")
     log.info(f"⏱️  Total time: {total_time:.1f} seconds")
     log.info(f"📊 Successfully generated images for {len(generated_images)}/8 styles:")
     
@@ -1000,8 +1000,8 @@ def main():
         log.info(f"📈 Average time per image: {avg_time_per_image:.1f}s")
         log.info(f"📁 Images saved to: images/")
         log.info(f"📝 Captions saved to: captions/")
-        log.info(f"📄 10 images allocated for social media only")
-        log.info(f"📄 PDFs will be created by weekly/monthly curators")
+        log.info(f"📄 10 images allocated for PDF curation (weekly/monthly/yearly)")
+        log.info(f"📄 PDFs will be created by weekly/monthly/yearly curators")
 
 if __name__ == "__main__":
     main() 
