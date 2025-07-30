@@ -90,32 +90,68 @@ def get_env(var, default=None, required=False):
     return value
 
 # === 📊 Configuration ===
-TEXT_PROVIDER = get_env('TEXT_PROVIDER', 'groq')
-TEXT_MODEL = get_env('TEXT_MODEL', 'llama3-8b-8192')
-GROQ_API_KEY = get_env('GROQ_API_KEY', required=True)
-GROQ_API_BASE = get_env('GROQ_API_BASE', 'https://api.groq.com/openai/v1')
+TEXT_PROVIDER = get_env('TEXT_PROVIDER', 'together')
+TEXT_MODEL = get_env('TEXT_MODEL', 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free')
 TOGETHER_API_KEY = get_env('TOGETHER_API_KEY', required=True)
 TOGETHER_API_BASE = get_env('TOGETHER_API_BASE', 'https://api.together.xyz/v1')
 
 IMAGE_PROVIDER = get_env('IMAGE_PROVIDER', 'together')
-IMAGE_MODEL = get_env('IMAGE_MODEL', 'black-forest-labs/flux-1-schnell')
+IMAGE_MODEL = get_env('IMAGE_MODEL', 'black-forest-labs/FLUX.1-schnell-free')
 IMAGE_WIDTH = int(get_env('IMAGE_WIDTH', '1024'))
 IMAGE_HEIGHT = int(get_env('IMAGE_HEIGHT', '1024'))
-INFERENCE_STEPS = int(get_env('INFERENCE_STEPS', '10'))
+INFERENCE_STEPS = int(get_env('INFERENCE_STEPS', '4'))
 GUIDANCE_SCALE = float(get_env('GUIDANCE_SCALE', '7.5'))
 
-PROMPT_SYSTEM = get_env('PROMPT_SYSTEM', 'You are a visionary architectural writer and provocateur. You create compelling, artistic image prompts that capture the essence of architectural concepts with vivid, poetic language.')
-PROMPT_TEMPLATE = get_env('PROMPT_TEMPLATE', 'Generate exactly {n} architectural image prompts on theme: \'{theme}\'. Each prompt should be a single, evocative line that describes a visual scene with artistic flair. Focus on mood, atmosphere, and architectural poetry. Do not include explanations or numbered lists - just the prompts, one per line.')
+# Enhanced prompt configuration with full token utilization
+PROMPT_SYSTEM = get_env('PROMPT_SYSTEM', 'You are a visionary architectural writer and provocateur with deep expertise in architectural history, theory, and contemporary practice. Your knowledge spans from ancient architectural traditions to cutting-edge computational design, encompassing structural engineering, material science, cultural anthropology, environmental sustainability, urban planning, landscape architecture, digital fabrication, philosophy of space, phenomenology, global architectural traditions, vernacular building, lighting design, acoustic design, thermal comfort, passive design strategies, accessibility, universal design principles, heritage conservation, adaptive reuse, parametric design, algorithmic architecture, biomimicry, nature-inspired design, social impact, community engagement, economic feasibility, construction methods, regulatory compliance, building codes, post-occupancy evaluation, user experience, and cross-cultural architectural exchange. You create compelling, artistic image prompts that capture the essence of architectural concepts with vivid, poetic language, considering multiple scales from urban context to material detail, balancing technical precision with artistic expression, and emphasizing the emotional and psychological impact of architectural spaces on human experience.')
 
-CAPTION_SYSTEM = get_env('CAPTION_SYSTEM', 'You are a masterful architectural poet and critic. You write profound, artistic captions that capture the deeper meaning and emotional resonance of architectural spaces.')
-CAPTION_TEMPLATE = get_env('CAPTION_TEMPLATE', 'Write exactly 6 lines, each containing exactly 6 words, that form a complete, meaningful caption for this architectural image: {prompt}. Each line should be a complete thought with poetic depth. The entire caption should tell a coherent story that reveals the architectural philosophy, emotional impact, and cultural significance of the space.')
+PROMPT_TEMPLATE = get_env('PROMPT_TEMPLATE', 'Generate exactly {n} architectural image prompts on theme: \'{theme}\'. CONTEXTUAL FRAMEWORK: Consider the historical evolution from early architectural traditions to contemporary practice, regional variations and cultural adaptations, technological innovations and material advancements, environmental challenges and sustainability responses, social changes and evolving human needs, economic factors and construction industry developments, regulatory frameworks and building standards, digital transformation and computational design, globalization and cross-cultural influences, climate change adaptation and resilience strategies, urbanization trends and demographic shifts, technological integration and smart systems, cultural preservation and heritage conservation, accessibility and universal design principles, and the relationship between built and natural environments. ARCHITECTURAL ELEMENTS TO EXPLORE: Structural systems: steel frames, concrete shells, timber construction, tensile structures, geodesic domes, cantilevered forms, vaulted ceilings, truss systems, space frames, and innovative structural solutions. Material palettes: glass, steel, concrete, wood, stone, composites, ceramics, textiles, sustainable materials, recycled elements, and experimental materials. Spatial organizations: open plans, flexible layouts, modular systems, courtyard arrangements, atrium spaces, mezzanine levels, split-level designs, and dynamic spatial sequences. Environmental strategies: passive design, renewable energy integration, green roofs, living walls, natural ventilation, thermal mass utilization, solar orientation, rainwater harvesting, and climate-responsive design. Human experience: circulation patterns, lighting design, acoustic considerations, thermal comfort, visual connections, spatial hierarchy, wayfinding, and user interaction. Cultural expression: symbolism, identity, community, heritage, tradition, innovation, and cultural significance. Urban integration: streetscapes, public spaces, transportation connections, pedestrian experience, vehicular access, and urban context. Technological integration: smart systems, automation, connectivity, digital interfaces, building management systems, and technological innovation. Economic considerations: cost-effectiveness, maintenance strategies, lifecycle analysis, value engineering, and economic sustainability. Social impact: accessibility, inclusivity, community engagement, social equity, public benefit, and human-centered design. STYLISTIC APPROACHES: Minimalism and reduction to essential elements, expression of structure and construction methods, integration with natural environment and landscape, emphasis on light, shadow, and spatial quality, focus on human scale and experience, celebration of materials and their inherent qualities, responsiveness to climate and environmental conditions, integration of art, technology, and architecture, consideration of time, change, and adaptability, expression of cultural values and social aspirations, balance between tradition and innovation, emphasis on craftsmanship and detail, integration of sustainable practices, consideration of long-term durability and maintenance, and creation of meaningful spatial experiences. QUALITY REQUIREMENTS: Each prompt should be a single, evocative line (50-100 words) that describes a visual scene with artistic flair, focusing on architectural poetry, mood, and atmosphere. Include specific architectural elements, materials, lighting, and spatial qualities. Consider cultural, historical, and philosophical context. Emphasize emotional resonance and visual impact. Use vivid, descriptive language that captures architectural essence. Balance technical precision with artistic expression. Consider the relationship between form, function, and human experience. Explore themes of permanence, transience, and transformation. Reflect on the relationship between built and natural environments. Consider multiple scales from urban context to material detail. Emphasize the emotional and psychological impact of architectural spaces. Generate the prompts now, one per line, without explanations or numbering:')
 
-# Style configuration for the selected style
+CAPTION_SYSTEM = get_env('CAPTION_SYSTEM', 'You are a masterful architectural poet and critic with comprehensive expertise in architectural theory, history, philosophy, and contemporary practice. Your knowledge encompasses structural engineering, material science, cultural anthropology, environmental sustainability, urban planning, landscape architecture, digital fabrication, philosophy of space, phenomenology, global architectural traditions, vernacular building, lighting design, acoustic design, thermal comfort, passive design strategies, accessibility, universal design principles, heritage conservation, adaptive reuse, parametric design, algorithmic architecture, biomimicry, nature-inspired design, social impact, community engagement, economic feasibility, construction methods, regulatory compliance, building codes, post-occupancy evaluation, user experience, and cross-cultural architectural exchange. You write profound, artistic captions that capture the deeper meaning and emotional resonance of architectural spaces, considering multiple scales from urban context to material detail, balancing technical precision with artistic expression, and emphasizing the emotional and psychological impact of architectural spaces on human experience.')
+
+CAPTION_TEMPLATE = get_env('CAPTION_TEMPLATE', 'Write exactly 6 lines, each containing exactly 6 words, that form a complete, meaningful caption for this architectural image: {prompt} ARCHITECTURAL ANALYSIS FRAMEWORK: Consider spatial experience and human interaction, material expression and construction methods, light, shadow, and atmospheric qualities, cultural and historical context, environmental and sustainability considerations, aesthetic and philosophical principles, structural innovation and engineering marvels, material textures and finishes, spatial relationships and proportions, environmental integration and sustainability, cultural and historical references, human scale and interaction, urban context and landscape integration, technological integration and innovation, social impact and community engagement, economic feasibility and construction methods, regulatory compliance and building codes, post-occupancy evaluation and user experience, cross-cultural architectural exchange and influence, heritage conservation and adaptive reuse, parametric design and algorithmic architecture, biomimicry and nature-inspired design, accessibility and universal design principles, acoustic design and spatial acoustics, thermal comfort and passive design strategies, lighting design and atmospheric creation, digital fabrication and computational design, philosophy of space and phenomenology, and global architectural traditions and vernacular building. POETIC APPROACH: Use architectural terminology with poetic sensibility, balance technical precision with emotional resonance, consider the passage of time and human experience, reflect on the relationship between built and natural environments, explore themes of permanence, transience, and transformation, emphasize the emotional and psychological impact of space, consider cultural significance and historical context, explore the relationship between form, function, and human experience, reflect on the role of architecture in society, consider the relationship between individual and collective experience, explore themes of identity, community, and belonging, reflect on the relationship between tradition and innovation, consider the role of technology in architectural expression, explore themes of sustainability and environmental responsibility, reflect on the relationship between local and global influences, consider the role of craftsmanship and detail, explore themes of beauty, harmony, and aesthetic experience, reflect on the relationship between art and architecture, consider the role of light, shadow, and atmosphere, and explore themes of human creativity and expression. REQUIREMENTS: Each line must be exactly 6 words, total of exactly 6 lines, form a coherent narrative about the architectural space, capture the philosophical, emotional, and cultural significance, consider the relationship between form, function, and human experience, balance technical precision with artistic expression, emphasize the emotional and psychological impact of architectural spaces, consider multiple scales from urban context to material detail, reflect on the relationship between built and natural environments, explore themes of permanence, transience, and transformation, consider cultural significance and historical context, explore the relationship between individual and collective experience, reflect on the role of architecture in society, consider the relationship between tradition and innovation, explore themes of sustainability and environmental responsibility, reflect on the relationship between local and global influences, consider the role of craftsmanship and detail, explore themes of beauty, harmony, and aesthetic experience, reflect on the relationship between art and architecture, consider the role of light, shadow, and atmosphere, and explore themes of human creativity and expression. Write the 6-line caption now:')
+
+# Style configuration for the selected style with enhanced sophistication
 STYLE_CONFIG = {
     'futuristic': {
         'model': 'black-forest-labs/FLUX.1-schnell-free',
-        'prompt_suffix': ', futuristic architecture, sci-fi aesthetic, glowing lights, sleek surfaces, advanced technology, architectural innovation',
-        'negative_prompt': 'traditional, classical, rustic, old, vintage, historical, medieval, gothic'
+        'prompt_suffix': ', futuristic architecture, sci-fi aesthetic, glowing lights, sleek surfaces, advanced technology, architectural innovation, cutting-edge design, technological integration, modern materials, innovative structures, digital age aesthetics, forward-thinking design, sustainable technology, smart building systems, automated environments, holographic displays, energy-efficient systems, green technology integration, urban futurism, sustainable innovation',
+        'negative_prompt': 'traditional, classical, rustic, old, vintage, historical, medieval, gothic, outdated, primitive, ancient, old-fashioned, retro, vintage, antique'
+    },
+    'minimalist': {
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
+        'prompt_suffix': ', minimalist architecture, clean lines, simple forms, essential elements, reduction to basics, pure geometry, uncluttered spaces, refined details, sophisticated simplicity, elegant restraint, balanced composition, harmonious proportions, thoughtful material selection, intentional emptiness, purposeful design, architectural purity, spatial clarity, visual calm, meditative spaces, zen aesthetics, less is more philosophy',
+        'negative_prompt': 'ornate, decorative, busy, cluttered, complex, elaborate, detailed, fancy, luxurious, extravagant, over-designed, excessive, overwhelming, chaotic'
+    },
+    'abstract': {
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
+        'prompt_suffix': ', abstract architecture, conceptual design, artistic interpretation, non-representational forms, experimental structures, avant-garde design, innovative geometry, creative expression, artistic architecture, imaginative spaces, unconventional forms, boundary-pushing design, artistic vision, creative interpretation, experimental materials, innovative construction, artistic expression, conceptual spaces, imaginative architecture, creative innovation',
+        'negative_prompt': 'literal, representational, traditional, conventional, realistic, straightforward, obvious, predictable, standard, typical, ordinary, common'
+    },
+    'technical': {
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
+        'prompt_suffix': ', technical architecture, engineering precision, structural clarity, construction details, technical drawing aesthetic, engineering marvel, structural innovation, technical excellence, precision engineering, construction technology, structural systems, engineering beauty, technical sophistication, construction methodology, structural integrity, engineering design, technical innovation, construction excellence, structural engineering, technical precision',
+        'negative_prompt': 'artistic, decorative, ornamental, aesthetic, beautiful, pretty, artistic, creative, imaginative, fanciful, unrealistic, impractical'
+    },
+    'watercolor': {
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
+        'prompt_suffix': ', watercolor architecture, artistic rendering, soft colors, flowing forms, artistic interpretation, painterly aesthetic, artistic expression, creative visualization, artistic architecture, imaginative rendering, artistic style, creative interpretation, artistic vision, painterly quality, artistic beauty, creative expression, artistic design, imaginative architecture, artistic innovation, creative beauty',
+        'negative_prompt': 'photorealistic, technical, precise, sharp, detailed, realistic, photographic, exact, accurate, literal, representational'
+    },
+    'anime': {
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
+        'prompt_suffix': ', anime architecture, stylized design, artistic interpretation, creative visualization, imaginative spaces, artistic expression, stylized aesthetic, creative design, artistic architecture, imaginative interpretation, stylized beauty, creative vision, artistic style, imaginative expression, creative architecture, stylized innovation, artistic design, imaginative beauty, creative style, artistic imagination',
+        'negative_prompt': 'realistic, photographic, literal, representational, traditional, conventional, realistic, straightforward, obvious, predictable'
+    },
+    'photorealistic': {
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
+        'prompt_suffix': ', photorealistic architecture, realistic rendering, photographic quality, lifelike detail, realistic materials, natural lighting, authentic appearance, true-to-life representation, realistic textures, natural colors, authentic materials, realistic proportions, natural environment, realistic atmosphere, authentic design, realistic beauty, natural aesthetics, authentic architecture, realistic innovation, natural beauty',
+        'negative_prompt': 'artistic, stylized, abstract, cartoon, painting, sketch, drawing, unrealistic, fake, artificial, synthetic, manufactured'
+    },
+    'sketch': {
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
+        'prompt_suffix': ', sketch architecture, hand-drawn aesthetic, artistic rendering, creative visualization, imaginative design, artistic expression, sketchy style, creative interpretation, artistic architecture, imaginative sketch, artistic vision, creative drawing, artistic style, imaginative expression, creative architecture, sketchy beauty, artistic design, imaginative sketch, creative style, artistic imagination',
+        'negative_prompt': 'photorealistic, technical, precise, sharp, detailed, realistic, photographic, exact, accurate, literal, representational'
     }
 }
 
@@ -183,7 +219,7 @@ def scrape_architectural_content():
 
 # === 🤖 LLM Integration ===
 def call_llm(prompt, system_prompt=None):
-    """Call LLM API based on provider"""
+    """Call LLM API with enhanced token limits for sophisticated prompts"""
     if TEXT_PROVIDER == 'groq':
         url = f"{GROQ_API_BASE}/chat/completions"
         api_key = GROQ_API_KEY
@@ -205,7 +241,7 @@ def call_llm(prompt, system_prompt=None):
     payload = {
         "model": model,
         "messages": messages,
-        "max_tokens": 2000,
+        "max_tokens": 4000,  # Enhanced from 2000 to 4000 for sophisticated responses
         "temperature": 0.8
     }
     
@@ -215,7 +251,7 @@ def call_llm(prompt, system_prompt=None):
     }
     
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response = requests.post(url, headers=headers, json=payload, timeout=120)  # Increased timeout for longer responses
         response.raise_for_status()
         data = response.json()
         result = data['choices'][0]['message']['content'].strip()
@@ -226,8 +262,8 @@ def call_llm(prompt, system_prompt=None):
         return None
 
 def generate_prompts(theme, num_prompts=50):
-    """Generate 50 architectural image prompts"""
-    log.info(f"🎨 Generating {num_prompts} prompts for theme: {theme}")
+    """Generate 50 architectural image prompts with enhanced sophistication"""
+    log.info(f"🎨 Generating {num_prompts} sophisticated prompts for theme: {theme}")
     
     prompt = PROMPT_TEMPLATE.format(n=num_prompts, theme=theme)
     response = call_llm(prompt, PROMPT_SYSTEM)
@@ -235,41 +271,109 @@ def generate_prompts(theme, num_prompts=50):
     if response:
         # Split into individual prompts
         prompts = [line.strip() for line in response.split('\n') if line.strip()]
-        log.info(f"✅ Generated {len(prompts)} prompts")
+        log.info(f"✅ Generated {len(prompts)} sophisticated prompts")
         return prompts[:num_prompts]  # Ensure we get exactly 50
     else:
         log.error("❌ Failed to generate prompts")
         return []
 
-def generate_caption(prompt):
-    """Generate a 6-line caption for an image prompt"""
-    caption_prompt = CAPTION_TEMPLATE.format(prompt=prompt)
-    response = call_llm(caption_prompt, CAPTION_SYSTEM)
+def calculate_similarity_score(caption1, caption2):
+    """Calculate similarity score between two captions"""
+    # Convert to lowercase and split into words
+    words1 = set(caption1.lower().replace('\n', ' ').split())
+    words2 = set(caption2.lower().replace('\n', ' ').split())
     
-    if response:
-        # Clean the response to remove AI-generated text
-        lines = []
-        for line in response.split('\n'):
-            line = line.strip()
-            if line and not any(ai_text in line.lower() for ai_text in [
-                "here is a", "caption that meets", "requirements:", "ai generated", 
-                "artificial intelligence", "generated by", "created by ai"
-            ]):
-                lines.append(line)
+    # Remove common stop words
+    stop_words = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+        'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+        'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must', 'shall', 'this', 'that',
+        'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+        'my', 'your', 'his', 'her', 'its', 'our', 'their', 'mine', 'yours', 'his', 'hers', 'ours', 'theirs'
+    }
+    
+    words1 = words1 - stop_words
+    words2 = words2 - stop_words
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    # Calculate Jaccard similarity
+    intersection = len(words1.intersection(words2))
+    union = len(words1.union(words2))
+    
+    return intersection / union if union > 0 else 0.0
+
+def is_caption_unique(new_caption, existing_captions, similarity_threshold=0.3):
+    """Check if a new caption is unique compared to existing captions"""
+    for existing_caption in existing_captions:
+        similarity = calculate_similarity_score(new_caption, existing_caption)
+        if similarity > similarity_threshold:
+            log.info(f"⚠️ Caption similarity detected: {similarity:.2f}")
+            return False
+    return True
+
+def generate_unique_caption(prompt, existing_captions, max_attempts=5):
+    """Generate a unique caption that doesn't repeat content from existing captions"""
+    log.info(f"📝 Generating unique caption for: {prompt[:50]}...")
+    
+    for attempt in range(max_attempts):
+        caption_prompt = CAPTION_TEMPLATE.format(prompt=prompt)
+        response = call_llm(caption_prompt, CAPTION_SYSTEM)
         
-        # Ensure exactly 6 lines
-        if len(lines) >= 6:
-            result = '\n'.join(lines[:6])
-            return result
+        if response:
+            # Clean the response to remove AI-generated text
+            lines = []
+            for line in response.split('\n'):
+                line = line.strip()
+                if line and not any(ai_text in line.lower() for ai_text in [
+                    "here is a", "caption that meets", "requirements:", "ai generated", 
+                    "artificial intelligence", "generated by", "created by ai", "architectural analysis",
+                    "poetic approach", "requirements", "write the", "caption now"
+                ]):
+                    lines.append(line)
+            
+            # Ensure exactly 6 lines
+            if len(lines) >= 6:
+                result = '\n'.join(lines[:6])
+            else:
+                # Pad with sophisticated lines if needed
+                while len(lines) < 6:
+                    lines.append("Architecture speaks through silent spaces")
+                result = '\n'.join(lines[:6])
+            
+            # Check if this caption is unique
+            if is_caption_unique(result, existing_captions):
+                log.info(f"✅ Generated unique caption (attempt {attempt + 1}): {result[:50]}...")
+                return result
+            else:
+                log.info(f"🔄 Caption too similar, retrying (attempt {attempt + 1}/{max_attempts})")
+                # Add variety to the prompt for next attempt
+                prompt += f" [Variation {attempt + 1}: Focus on different aspects]"
         else:
-            # Pad with generic lines if needed
-            while len(lines) < 6:
-                lines.append("Architecture speaks through silent spaces")
-            result = '\n'.join(lines[:6])
-            return result
-    else:
-        # Fallback caption
-        return "Architecture speaks through silent spaces\nForm follows function in perfect harmony\nLight dances across geometric surfaces\nHuman scale meets monumental vision\nMaterials tell stories of creation\nSpace becomes poetry in motion"
+            log.warning(f"⚠️ Failed to generate caption on attempt {attempt + 1}")
+    
+    # If all attempts failed, generate a completely different fallback
+    log.warning("⚠️ Using unique fallback caption")
+    fallback_captions = [
+        "Silent spaces whisper architectural secrets\nForm emerges from functional necessity\nLight sculpts geometric boundaries\nHuman scale defines monumental vision\nMaterials narrate stories of creation\nSpace transforms into poetic motion",
+        "Architectural dreams materialize in concrete\nFunction follows form in perfect balance\nShadows dance across structural surfaces\nMonumental vision meets human intimacy\nCreation stories etched in materials\nPoetry flows through spatial boundaries",
+        "Concrete dreams take architectural form\nBalance achieved through functional harmony\nSurfaces reflect structural light patterns\nIntimate spaces within monumental scale\nMaterials bear witness to creation\nBoundaries dissolve into spatial poetry",
+        "Architectural visions crystallize in space\nHarmony emerges from functional design\nLight patterns illuminate structural forms\nScale balances monumentality with intimacy\nCreation narratives embedded in materials\nPoetry manifests through spatial design",
+        "Space becomes architectural reality\nDesign harmonizes function with beauty\nForms emerge from light and shadow\nIntimacy coexists with grandeur\nMaterials speak of creative vision\nSpatial poetry transcends boundaries"
+    ]
+    
+    # Choose a fallback that's different from existing captions
+    for fallback in fallback_captions:
+        if is_caption_unique(fallback, existing_captions):
+            return fallback
+    
+    # If all fallbacks are similar, modify one slightly
+    return fallback_captions[0].replace("Architectural", "Structural").replace("spaces", "volumes")
+
+def generate_caption(prompt):
+    """Legacy function - now calls generate_unique_caption with empty existing_captions"""
+    return generate_unique_caption(prompt, [])
 
 # === 🖼️ Image Generation ===
 def generate_single_image(prompt, style_name, image_number):
@@ -279,11 +383,11 @@ def generate_single_image(prompt, style_name, image_number):
     style_dir = os.path.join("images", style_name)
     os.makedirs(style_dir, exist_ok=True)
     
-    # Get style configuration
+    # Get enhanced style configuration with sophisticated prompts
     style_config = STYLE_CONFIG.get(style_name, {
         'model': 'black-forest-labs/FLUX.1-schnell-free',  # Use free model as default
-        'prompt_suffix': f', {style_name} style, architectural beauty',
-        'negative_prompt': 'blurry, low quality, distorted'
+        'prompt_suffix': f', {style_name} architectural style, sophisticated design, artistic composition, professional photography, high quality, detailed materials, perfect lighting, architectural beauty, structural elegance, spatial harmony, material expression, environmental integration, human scale consideration, cultural significance, technical precision, aesthetic excellence',
+        'negative_prompt': 'blurry, low quality, distorted, amateur, unrealistic, poor composition, bad lighting, ugly, disorganized, messy, unprofessional, cartoon, painting, sketch, drawing, text, watermark, signature'
     })
     
     full_prompt = f"{prompt}{style_config['prompt_suffix']}"
@@ -392,18 +496,31 @@ def generate_all_images(prompts, style_name):
 
 # === 📝 Caption Generation ===
 def generate_all_captions(prompts):
-    """Generate captions for all prompts sequentially - completely linear"""
-    log.info(f"📝 Starting sequential caption generation for {len(prompts)} prompts")
+    """Generate unique captions for all prompts sequentially with deduplication"""
+    log.info(f"📝 Starting sequential caption generation with deduplication for {len(prompts)} prompts")
     
     captions = []
-    with tqdm(total=len(prompts), desc=f"📝 Generating captions", unit="caption", 
+    with tqdm(total=len(prompts), desc=f"📝 Generating unique captions", unit="caption", 
               bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pbar:
         
         for i, prompt in enumerate(prompts):
-            pbar.set_description(f"📝 Generating caption {i+1}/{len(prompts)}")
-            caption = generate_caption(prompt)
+            pbar.set_description(f"📝 Generating unique caption {i+1}/{len(prompts)}")
+            
+            # Generate unique caption that doesn't repeat content from previous captions
+            caption = generate_unique_caption(prompt, captions)
             captions.append(caption)
-            pbar.set_postfix_str(f"✅ Success")
+            
+            # Show similarity info in progress bar
+            if len(captions) > 1:
+                # Calculate average similarity with previous captions
+                similarities = []
+                for prev_caption in captions[:-1]:
+                    sim = calculate_similarity_score(caption, prev_caption)
+                    similarities.append(sim)
+                avg_similarity = sum(similarities) / len(similarities)
+                pbar.set_postfix_str(f"✅ Unique (avg sim: {avg_similarity:.2f})")
+            else:
+                pbar.set_postfix_str(f"✅ First caption")
             
             pbar.update(1)
             
@@ -412,27 +529,45 @@ def generate_all_captions(prompts):
                 pbar.set_description(f"⏳ Waiting before next caption...")
                 time.sleep(1)
     
-    log.info(f"🎉 Sequential caption generation complete: {len(captions)}/{len(prompts)} captions generated")
+    log.info(f"🎉 Sequential caption generation with deduplication complete: {len(captions)}/{len(prompts)} unique captions generated")
+    
+    # Log deduplication summary
+    total_similarities = 0
+    similarity_count = 0
+    for i, caption1 in enumerate(captions):
+        for j, caption2 in enumerate(captions[i+1:], i+1):
+            sim = calculate_similarity_score(caption1, caption2)
+            total_similarities += sim
+            similarity_count += 1
+            if sim > 0.1:  # Log any notable similarities
+                log.info(f"📊 Caption {i+1} vs {j+1} similarity: {sim:.3f}")
+    
+    if similarity_count > 0:
+        avg_similarity = total_similarities / similarity_count
+        log.info(f"📊 Overall caption uniqueness: {1 - avg_similarity:.3f} (lower similarity = more unique)")
+    
     return captions
 
 # === 📄 PDF Generation ===
 def place_caption_with_white_band(c, caption, w, h, page_num):
     """
-    Draw a 100% white band at the bottom of the page, overlay the caption (left) and page number (right).
-    The band is flush with the bottom of the page.
+    Draw a white band at the bottom of the page with increased top padding,
+    overlay the caption (center-aligned) and page number (right-aligned).
+    The band has extra padding to separate it from the image boundary.
     """
     text = caption.split('\n')
     font_size = 14
     line_spacing = 18
     padding_x = 24
     padding_y = 16
+    top_padding = 40  # Increased top padding for better separation from image
 
     # Calculate text dimensions
     c.setFont("Helvetica-Bold", font_size)
     text_width = max(c.stringWidth(line, "Helvetica-Bold", font_size) for line in text)
     text_height = len(text) * line_spacing
 
-    band_height = text_height + 2 * padding_y
+    band_height = text_height + 2 * padding_y + top_padding
     band_y = 0  # flush with the bottom of the page
     band_x = 0
     band_width = w
@@ -441,11 +576,11 @@ def place_caption_with_white_band(c, caption, w, h, page_num):
     c.setFillColorRGB(1, 1, 1)
     c.rect(band_x, band_y, band_width, band_height, fill=1, stroke=0)
 
-    # Draw caption (center-aligned, vertically centered in band)
+    # Draw caption (center-aligned, positioned above the bottom padding)
     c.setFont("Helvetica-Bold", font_size)
     c.setFillColorRGB(0, 0, 0)
     for i, line in enumerate(text):
-        y = band_y + band_height - padding_y - (len(text) - i - 1) * line_spacing
+        y = band_y + band_height - padding_y - top_padding - (len(text) - i - 1) * line_spacing
         c.drawCentredString(band_x + band_width/2, y, line)
 
     # Draw page number (right-aligned, at the bottom of the white band, bold)
@@ -469,8 +604,8 @@ def create_daily_pdf(images, captions, style_name, theme):
     year = today.year
     sequential_title = f"ASK Daily Architectural Research Zine - Volume {year}.{day_of_year:03d}"
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    pdf_filename = f"ASK_Daily_Vol{year}_{day_of_year:03d}_{style_name.upper()}_{timestamp}.pdf"
+    # Updated PDF naming convention
+    pdf_filename = f"ASK_Daily_Architectural_Research_Zine-{year}-VOL-{day_of_year:03d}-{style_name.capitalize()}.pdf"
     pdf_path = os.path.join(output_dir, pdf_filename)
     
     log.info(f"📄 Creating PDF: {pdf_filename}")
@@ -495,7 +630,7 @@ def create_daily_pdf(images, captions, style_name, theme):
     c.setFont("Helvetica", 16)
     c.drawCentredString(w/2, h/2 - 30, f"{datetime.now().strftime('%B %d, %Y')}")
     c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(w/2, h/2 - 70, f"{style_name.upper()} EDITION")
+    c.drawCentredString(w/2, h/2 - 70, f"{style_name.capitalize()} Edition")
     c.setFont("Helvetica", 14)
     c.drawCentredString(w/2, h/2 - 110, f"50 Full-Bleed Architectural Images")
     c.setFont("Helvetica", 12)
@@ -541,7 +676,7 @@ def create_daily_pdf(images, captions, style_name, theme):
     c.setFont("Helvetica", 14)
     c.drawCentredString(w/2, h/2 - 20, f"Volume {year}.{day_of_year:03d}")
     c.setFont("Helvetica", 12)
-    c.drawCentredString(w/2, h/2 - 50, f"{style_name.upper()} EDITION")
+    c.drawCentredString(w/2, h/2 - 50, f"{style_name.capitalize()} Edition")
     c.setFont("Helvetica", 10)
     c.drawCentredString(w/2, h/2 - 80, f"Theme: {theme}")
     c.setFont("Helvetica", 8)
