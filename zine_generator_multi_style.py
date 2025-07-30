@@ -126,49 +126,49 @@ class RateLimiter:
 # === 🎨 Style Models Configuration ===
 STYLE_MODELS = {
     'futuristic': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', futuristic sci-fi style, neon colors, advanced technology, cyberpunk aesthetic',
         'negative_prompt': 'cartoon, anime, sketch, watercolor, traditional art, vintage'
     },
     'minimalist': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', minimalist design, clean lines, simple composition, modern aesthetic',
         'negative_prompt': 'complex, cluttered, detailed, ornate, busy'
     },
     'sketch': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', pencil sketch style, hand-drawn, artistic line work, monochrome',
         'negative_prompt': 'colorful, digital art, 3d render, photorealistic'
     },
     'abstract': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', abstract art style, geometric shapes, vibrant colors, modern art',
         'negative_prompt': 'realistic, photorealistic, traditional, representational'
     },
     'technical': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', technical drawing style, blueprint aesthetic, engineering diagrams, precise lines',
         'negative_prompt': 'artistic, abstract, colorful, organic shapes'
     },
     'watercolor': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', watercolor painting style, soft edges, flowing colors, artistic',
         'negative_prompt': 'digital art, sharp edges, geometric, technical'
     },
     'anime': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', anime style, Japanese animation, vibrant colors, stylized characters',
         'negative_prompt': 'realistic, photorealistic, western animation, 3d'
     },
     'photorealistic': {
-        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
+        'model': 'black-forest-labs/FLUX.1-schnell',
         'prompt_suffix': ', photorealistic style, high detail, realistic lighting, professional photography',
         'negative_prompt': 'cartoon, anime, abstract, artistic, stylized'
     }
 }
 
 # === 🔧 Performance and Configuration Settings ===
-TEXT_PROVIDER = get_env("TEXT_PROVIDER", "together")
+TEXT_PROVIDER = get_env("TEXT_PROVIDER", "groq")
 TEXT_MODEL = get_env("TEXT_MODEL", required=True)
 IMAGE_PROVIDER = get_env("IMAGE_PROVIDER", "together")
 IMAGE_MODEL = get_env("IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
@@ -192,9 +192,11 @@ rate_limiter = RateLimiter(RATE_LIMIT_PER_MINUTE)
 
 # === API Keys and Endpoints ===
 API_BASES = {
+    "groq": get_env("GROQ_API_BASE", "https://api.groq.com/openai/v1"),
     "together": get_env("TOGETHER_API_BASE", "https://api.together.xyz/v1")
 }
 API_KEYS = {
+    "groq": get_env("GROQ_API_KEY", required=True),
     "together": get_env("TOGETHER_API_KEY", required=True)
 }
 
@@ -667,7 +669,7 @@ def generate_single_image(args):
     
     # Prepare the request payload
     payload = {
-        "model": IMAGE_MODEL,
+        "model": style_config['model'],
         "prompt": full_prompt,
         "negative_prompt": negative_prompt,
         "width": IMAGE_WIDTH,
@@ -678,7 +680,7 @@ def generate_single_image(args):
     }
     
     headers = {
-        "Authorization": f"Bearer {API_KEYS['together']}",
+        "Authorization": f"Bearer {get_env('TOGETHER_API_KEY')}",
         "Content-Type": "application/json"
     }
     
@@ -704,8 +706,43 @@ def generate_single_image(args):
                 if 'data' in data and len(data['data']) > 0:
                     image_data = data['data'][0]
                     
-                    # Handle base64 image data
-                    if 'b64_json' in image_data:
+                    # Handle image data (URL or base64)
+                    if 'url' in image_data:
+                        # Download image from URL
+                        image_url = image_data['url']
+                        image_response = requests.get(image_url, timeout=60)
+                        if image_response.status_code == 200:
+                            # Save image to file
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
+                            image_path = os.path.join(style_dir, image_filename)
+                            
+                            with open(image_path, 'wb') as f:
+                                f.write(image_response.content)
+                            
+                            # Log image details
+                            image_log_file = os.path.join(style_dir, f"{style_name}_image_log.txt")
+                            with open(image_log_file, 'a', encoding='utf-8') as log_file:
+                                log_file.write(f"Image {i+1}: {image_filename}\n")
+                                log_file.write(f"Prompt: {prompt}\n")
+                                log_file.write(f"Full Prompt: {full_prompt}\n")
+                                log_file.write(f"Negative Prompt: {negative_prompt}\n")
+                                log_file.write(f"Model: {style_config['model']}\n")
+                                log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                                log_file.write(f"File Size: {os.path.getsize(image_path)} bytes\n")
+                                log_file.write(f"Status: SUCCESS\n")
+                                log_file.write("-" * 80 + "\n")
+                            
+                            log.info(f"✅ Generated {style_name} image {i+1}: {image_filename} ({os.path.getsize(image_path)} bytes)")
+                            return f"together_ai_{image_filename}", image_path
+                        else:
+                            log.error(f"❌ Failed to download image from {image_url}")
+                            if attempt < MAX_RETRIES - 1:
+                                time.sleep(5)
+                                continue
+                    
+                    elif 'b64_json' in image_data:
+                        # Handle base64 image data (fallback)
                         image_b64 = image_data['b64_json']
                         image_bytes = base64.b64decode(image_b64)
                         
@@ -724,7 +761,7 @@ def generate_single_image(args):
                             log_file.write(f"Prompt: {prompt}\n")
                             log_file.write(f"Full Prompt: {full_prompt}\n")
                             log_file.write(f"Negative Prompt: {negative_prompt}\n")
-                            log_file.write(f"Model: {IMAGE_MODEL}\n")
+                            log_file.write(f"Model: {style_config['model']}\n")
                             log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                             log_file.write(f"File Size: {os.path.getsize(image_path)} bytes\n")
                             log_file.write(f"Status: SUCCESS\n")
