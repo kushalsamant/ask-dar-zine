@@ -24,11 +24,13 @@ class WebScraper:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': os.getenv('SCRAPER_USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
         })
-        self.content_dir = 'scraped_content'
-        self.timeout = 15
-        self.max_retries = 3
+        self.content_dir = os.getenv('SCRAPER_CONTENT_DIR', 'scraped_content')
+        self.timeout = int(os.getenv('SCRAPER_TIMEOUT', '15'))
+        self.max_retries = int(os.getenv('SCRAPER_MAX_RETRIES', '3'))
+        self.max_workers = int(os.getenv('SCRAPER_MAX_WORKERS', '4'))
+        self.articles_per_source = int(os.getenv('SCRAPER_ARTICLES_PER_SOURCE', '10'))
         self.ensure_content_dir()
         
     def ensure_content_dir(self):
@@ -64,7 +66,7 @@ class WebScraper:
         logger.error(f"❌ Failed to fetch {url} after {retries} attempts")
         return None
     
-    def extract_article_data(self, article_elem, source_name, category="Technology"):
+    def extract_article_data(self, article_elem, source_name, category="Architecture"):
         """Extract article data from HTML element"""
         try:
             # Try different selectors for title
@@ -100,366 +102,146 @@ class WebScraper:
                 'timestamp': datetime.now().isoformat(),
                 'category': category
             }
-            
         except Exception as e:
-            logger.debug(f"Failed to extract article data: {e}")
+            logger.warning(f"⚠️ Error extracting article data: {e}")
             return None
-            
-    def scrape_tech_crunch(self):
-        """Scrape TechCrunch for tech news"""
-        try:
-            url = "https://techcrunch.com/"
-            response = self.safe_request(url)
-            if not response:
-                return []
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
-            
-            # Look for articles in various containers
-            article_selectors = [
-                'article',
-                '.post-block',
-                '.wp-block-tc23-post-picker-item'
-            ]
-            
-            for selector in article_selectors:
-                for article in soup.select(selector)[:10]:
-                    article_data = self.extract_article_data(article, 'TechCrunch')
-                    if article_data:
-                        articles.append(article_data)
-                        if len(articles) >= 10:
-                            break
-                if len(articles) >= 10:
-                    break
-            
-            logger.info(f"✅ Scraped {len(articles)} articles from TechCrunch")
-            return articles
-            
-        except Exception as e:
-            logger.error(f"❌ Error scraping TechCrunch: {e}")
+
+    def scrape_archdaily(self):
+        """Scrape articles from ArchDaily"""
+        url = "https://www.archdaily.com/"
+        response = self.safe_request(url)
+        if not response:
             return []
             
-    def scrape_ars_technica(self):
-        """Scrape Ars Technica for tech and science news"""
-        try:
-            url = "https://arstechnica.com/"
-            response = self.safe_request(url)
-            if not response:
-                return []
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
-            
-            # Look for articles in various containers
-            article_selectors = [
-                'article',
-                '.listing',
-                '.post'
-            ]
-            
-            for selector in article_selectors:
-                for article in soup.select(selector)[:10]:
-                    article_data = self.extract_article_data(article, 'Ars Technica')
-                    if article_data:
-                        articles.append(article_data)
-                        if len(articles) >= 10:
-                            break
-                if len(articles) >= 10:
-                    break
-            
-            logger.info(f"✅ Scraped {len(articles)} articles from Ars Technica")
-            return articles
-            
-        except Exception as e:
-            logger.error(f"❌ Error scraping Ars Technica: {e}")
-            return []
-            
-    def scrape_science_daily(self):
-        """Scrape Science Daily for science news"""
-        try:
-            url = "https://www.sciencedaily.com/"
-            response = self.safe_request(url)
-            if not response:
-                return []
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
-            
-            # Look for latest headlines
-            headline_selectors = [
-                '.latest-head',
-                '.headlines',
-                'h3 a'
-            ]
-            
-            for selector in headline_selectors:
-                for headline in soup.select(selector)[:10]:
-                    article_data = self.extract_article_data(headline, 'Science Daily', 'Science')
-                    if article_data:
-                        articles.append(article_data)
-                        if len(articles) >= 10:
-                            break
-                if len(articles) >= 10:
-                    break
-            
-            logger.info(f"✅ Scraped {len(articles)} articles from Science Daily")
-            return articles
-            
-        except Exception as e:
-            logger.error(f"❌ Error scraping Science Daily: {e}")
-            return []
-            
-    def scrape_reddit_science(self):
-        """Scrape Reddit r/science for trending topics"""
-        try:
-            url = "https://www.reddit.com/r/science/hot.json"
-            response = self.session.get(url, timeout=10)
-            data = response.json()
-            
-            articles = []
-            for post in data['data']['children'][:10]:
-                post_data = post['data']
-                title = post_data.get('title', '')
-                url = f"https://reddit.com{post_data.get('permalink', '')}"
+        soup = BeautifulSoup(response.content, 'html.parser')
+        articles = []
+        
+        # Look for article elements
+        article_elements = soup.find_all(['article', 'div'], class_=lambda x: x and any(word in x.lower() for word in ['post', 'article', 'story', 'entry', 'feed']))
+        
+        for elem in article_elements[:self.articles_per_source]:  # Limit to configured number of articles
+            article_data = self.extract_article_data(elem, "ArchDaily", "Architecture")
+            if article_data:
+                articles.append(article_data)
                 
-                if title:
-                    articles.append({
-                        'title': title,
-                        'url': url,
-                        'source': 'Reddit r/science',
-                        'timestamp': datetime.now().isoformat(),
-                        'category': 'Science'
-                    })
-            
-            return articles
-        except Exception as e:
-            logger.error(f"Error scraping Reddit: {e}")
+        logger.info(f"✅ Scraped {len(articles)} articles from ArchDaily")
+        return articles
+
+
+
+    def scrape_designboom(self):
+        """Scrape articles from Designboom"""
+        url = "https://www.designboom.com/"
+        response = self.safe_request(url)
+        if not response:
             return []
             
-    def scrape_wired(self):
-        """Scrape Wired for tech and science news"""
-        try:
-            url = "https://www.wired.com/"
-            response = self.safe_request(url)
-            if not response:
-                return []
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
-            
-            # Look for articles in various containers
-            article_selectors = [
-                'article',
-                '.listing',
-                '.post'
-            ]
-            
-            for selector in article_selectors:
-                for article in soup.select(selector)[:10]:
-                    article_data = self.extract_article_data(article, 'Wired')
-                    if article_data:
-                        articles.append(article_data)
-                        if len(articles) >= 10:
-                            break
-                if len(articles) >= 10:
-                    break
-            
-            logger.info(f"✅ Scraped {len(articles)} articles from Wired")
-            return articles
-            
-        except Exception as e:
-            logger.error(f"❌ Error scraping Wired: {e}")
-            return []
-            
-    def scrape_verge(self):
-        """Scrape The Verge for tech news"""
-        try:
-            url = "https://www.theverge.com/"
-            response = self.safe_request(url)
-            if not response:
-                return []
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
-            
-            # Look for articles in various containers
-            article_selectors = [
-                'article',
-                '.listing',
-                '.post'
-            ]
-            
-            for selector in article_selectors:
-                for article in soup.select(selector)[:10]:
-                    article_data = self.extract_article_data(article, 'The Verge')
-                    if article_data:
-                        articles.append(article_data)
-                        if len(articles) >= 10:
-                            break
-                if len(articles) >= 10:
-                    break
-            
-            logger.info(f"✅ Scraped {len(articles)} articles from The Verge")
-            return articles
-            
-        except Exception as e:
-            logger.error(f"❌ Error scraping The Verge: {e}")
-            return []
-            
-    def scrape_nature(self):
-        """Scrape Nature for science news"""
-        try:
-            url = "https://www.nature.com/news"
-            response = self.safe_request(url)
-            if not response:
-                return []
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
-            
-            # Look for articles in various containers
-            article_selectors = [
-                'article',
-                '.listing',
-                '.post'
-            ]
-            
-            for selector in article_selectors:
-                for article in soup.select(selector)[:10]:
-                    article_data = self.extract_article_data(article, 'Nature')
-                    if article_data:
-                        articles.append(article_data)
-                        if len(articles) >= 10:
-                            break
-                if len(articles) >= 10:
-                    break
-            
-            logger.info(f"✅ Scraped {len(articles)} articles from Nature")
-            return articles
-            
-        except Exception as e:
-            logger.error(f"❌ Error scraping Nature: {e}")
-            return []
-            
-    def scrape_scientific_american(self):
-        """Scrape Scientific American for science news"""
-        try:
-            url = "https://www.scientificamerican.com/"
-            response = self.safe_request(url)
-            if not response:
-                return []
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
-            
-            # Look for articles in various containers
-            article_selectors = [
-                'article',
-                '.listing',
-                '.post'
-            ]
-            
-            for selector in article_selectors:
-                for article in soup.select(selector)[:10]:
-                    article_data = self.extract_article_data(article, 'Scientific American')
-                    if article_data:
-                        articles.append(article_data)
-                        if len(articles) >= 10:
-                            break
-                if len(articles) >= 10:
-                    break
-            
-            logger.info(f"✅ Scraped {len(articles)} articles from Scientific American")
-            return articles
-            
-        except Exception as e:
-            logger.error(f"❌ Error scraping Scientific American: {e}")
-            return []
-            
-    def scrape_reddit_technology(self):
-        """Scrape Reddit r/technology for trending tech topics"""
-        try:
-            url = "https://www.reddit.com/r/technology/hot.json"
-            response = self.session.get(url, timeout=10)
-            data = response.json()
-            
-            articles = []
-            for post in data['data']['children'][:10]:
-                post_data = post['data']
-                title = post_data.get('title', '')
-                url = f"https://reddit.com{post_data.get('permalink', '')}"
+        soup = BeautifulSoup(response.content, 'html.parser')
+        articles = []
+        
+        # Look for article elements
+        article_elements = soup.find_all(['article', 'div'], class_=lambda x: x and any(word in x.lower() for word in ['post', 'article', 'story', 'entry', 'feed']))
+        
+        for elem in article_elements[:self.articles_per_source]:  # Limit to configured number of articles
+            article_data = self.extract_article_data(elem, "Designboom", "Design")
+            if article_data:
+                articles.append(article_data)
                 
-                if title:
-                    articles.append({
-                        'title': title,
-                        'url': url,
-                        'source': 'Reddit r/technology',
-                        'timestamp': datetime.now().isoformat(),
-                        'category': 'Technology'
-                    })
-            
-            return articles
-        except Exception as e:
-            logger.error(f"Error scraping Reddit r/technology: {e}")
+        logger.info(f"✅ Scraped {len(articles)} articles from Designboom")
+        return articles
+
+
+
+    def scrape_architizer(self):
+        """Scrape articles from Architizer"""
+        url = "https://architizer.com/"
+        response = self.safe_request(url)
+        if not response:
             return []
             
-    def scrape_reddit_futurology(self):
-        """Scrape Reddit r/Futurology for future tech topics"""
-        try:
-            url = "https://www.reddit.com/r/Futurology/hot.json"
-            response = self.session.get(url, timeout=10)
-            data = response.json()
-            
-            articles = []
-            for post in data['data']['children'][:10]:
-                post_data = post['data']
-                title = post_data.get('title', '')
-                url = f"https://reddit.com{post_data.get('permalink', '')}"
+        soup = BeautifulSoup(response.content, 'html.parser')
+        articles = []
+        
+        # Look for article elements
+        article_elements = soup.find_all(['article', 'div'], class_=lambda x: x and any(word in x.lower() for word in ['post', 'article', 'story', 'entry', 'feed']))
+        
+        for elem in article_elements[:self.articles_per_source]:  # Limit to configured number of articles
+            article_data = self.extract_article_data(elem, "Architizer", "Architecture")
+            if article_data:
+                articles.append(article_data)
                 
-                if title:
-                    articles.append({
-                        'title': title,
-                        'url': url,
-                        'source': 'Reddit r/Futurology',
-                        'timestamp': datetime.now().isoformat(),
-                        'category': 'Technology'
-                    })
-            
-            return articles
-        except Exception as e:
-            logger.error(f"Error scraping Reddit r/Futurology: {e}")
+        logger.info(f"✅ Scraped {len(articles)} articles from Architizer")
+        return articles
+
+
+
+    def scrape_interior_design(self):
+        """Scrape articles from Interior Design Magazine"""
+        url = "https://www.interiordesign.net/"
+        response = self.safe_request(url)
+        if not response:
             return []
             
+        soup = BeautifulSoup(response.content, 'html.parser')
+        articles = []
+        
+        # Look for article elements
+        article_elements = soup.find_all(['article', 'div'], class_=lambda x: x and any(word in x.lower() for word in ['post', 'article', 'story', 'entry', 'feed']))
+        
+        for elem in article_elements[:self.articles_per_source]:  # Limit to configured number of articles
+            article_data = self.extract_article_data(elem, "Interior Design", "Interior Design")
+            if article_data:
+                articles.append(article_data)
+                
+        logger.info(f"✅ Scraped {len(articles)} articles from Interior Design")
+        return articles
+
+    def scrape_architectural_record(self):
+        """Scrape articles from Architectural Record"""
+        url = "https://www.architecturalrecord.com/"
+        response = self.safe_request(url)
+        if not response:
+            return []
+            
+        soup = BeautifulSoup(response.content, 'html.parser')
+        articles = []
+        
+        # Look for article elements
+        article_elements = soup.find_all(['article', 'div'], class_=lambda x: x and any(word in x.lower() for word in ['post', 'article', 'story', 'entry', 'feed']))
+        
+        for elem in article_elements[:self.articles_per_source]:  # Limit to configured number of articles
+            article_data = self.extract_article_data(elem, "Architectural Record", "Architecture")
+            if article_data:
+                articles.append(article_data)
+                
+        logger.info(f"✅ Scraped {len(articles)} articles from Architectural Record")
+        return articles
+
     def scrape_all_sources(self):
-        """Scrape all sources and combine results"""
-        logger.info("Starting web scraping from all sources...")
+        """Scrape articles from all architectural sources"""
+        sources = [
+            self.scrape_archdaily,
+            self.scrape_designboom,
+            self.scrape_architizer,
+            self.scrape_interior_design,
+            self.scrape_architectural_record
+        ]
         
         all_articles = []
         
-        # Scrape each source - 10 top sources
-        sources = [
-            self.scrape_tech_crunch,
-            self.scrape_ars_technica,
-            self.scrape_science_daily,
-            self.scrape_wired,
-            self.scrape_verge,
-            self.scrape_nature,
-            self.scrape_scientific_american,
-            self.scrape_reddit_science,
-            self.scrape_reddit_technology,
-            self.scrape_reddit_futurology
-        ]
+        # Use ThreadPoolExecutor for concurrent scraping
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future_to_source = {executor.submit(source): source.__name__ for source in sources}
+            
+            for future in concurrent.futures.as_completed(future_to_source):
+                source_name = future_to_source[future]
+                try:
+                    articles = future.result()
+                    all_articles.extend(articles)
+                    logger.info(f"Scraped {len(articles)} articles from {source_name}")
+                except Exception as e:
+                    logger.error(f"❌ Error scraping {source_name}: {e}")
         
-        for source_func in sources:
-            try:
-                articles = source_func()
-                all_articles.extend(articles)
-                logger.info(f"Scraped {len(articles)} articles from {source_func.__name__}")
-                time.sleep(random.uniform(1, 3))  # Be respectful to servers
-            except Exception as e:
-                logger.error(f"Error with {source_func.__name__}: {e}")
-                
         # Remove duplicates based on title
         seen_titles = set()
         unique_articles = []
@@ -467,43 +249,51 @@ class WebScraper:
             if article['title'] not in seen_titles:
                 seen_titles.add(article['title'])
                 unique_articles.append(article)
-                
+        
         logger.info(f"Total unique articles scraped: {len(unique_articles)}")
         return unique_articles
-        
+
     def save_content(self, articles, filename):
-        """Save scraped content to JSON file"""
+        """Save articles to JSON file"""
         filepath = os.path.join(self.content_dir, filename)
         
         # Load existing content if file exists
-        existing_content = []
+        existing_articles = []
         if os.path.exists(filepath):
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
-                    existing_content = json.load(f)
+                    existing_articles = json.load(f)
             except Exception as e:
-                logger.error(f"Error loading existing content: {e}")
-                
-        # Add new articles
-        all_content = existing_content + articles
+                logger.warning(f"⚠️ Could not load existing content: {e}")
+        
+        # Combine existing and new articles
+        all_articles = existing_articles + articles
+        
+        # Remove duplicates based on title
+        seen_titles = set()
+        unique_articles = []
+        for article in all_articles:
+            if article['title'] not in seen_titles:
+                seen_titles.add(article['title'])
+                unique_articles.append(article)
         
         # Save to file
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(all_content, f, indent=2, ensure_ascii=False)
-            logger.info(f"Saved {len(articles)} articles to {filename}")
+                json.dump(unique_articles, f, indent=2, ensure_ascii=False)
+            logger.info(f"✅ Saved {len(unique_articles)} articles to {filename}")
         except Exception as e:
-            logger.error(f"Error saving content: {e}")
-            
+            logger.error(f"❌ Error saving content: {e}")
+
     def run_daily_scraping(self):
-        """Run daily scraping and save content"""
+        """Run the daily scraping process"""
         logger.info("Starting daily web scraping...")
         
         # Scrape all sources
         articles = self.scrape_all_sources()
         
         if articles:
-            # Save to daily content file
+            # Save daily content
             self.save_content(articles, 'daily_content.json')
             
             # Update rolling content files
@@ -511,35 +301,18 @@ class WebScraper:
             
             logger.info(f"Daily scraping completed. Scraped {len(articles)} articles.")
         else:
-            logger.warning("No articles scraped today.")
-            
+            logger.warning("⚠️ No articles scraped today")
+
     def update_rolling_content(self, new_articles):
         """Update weekly, monthly, and yearly content files"""
-        # Load existing content
-        weekly_file = os.path.join(self.content_dir, 'weekly_content.json')
-        monthly_file = os.path.join(self.content_dir, 'monthly_content.json')
-        yearly_file = os.path.join(self.content_dir, 'yearly_content.json')
+        # Update weekly content (last 7 days)
+        self.save_content(new_articles, 'weekly_content.json')
         
-        # Add new articles to each file
-        for filename in [weekly_file, monthly_file, yearly_file]:
-            existing_content = []
-            if os.path.exists(filename):
-                try:
-                    with open(filename, 'r', encoding='utf-8') as f:
-                        existing_content = json.load(f)
-                except Exception as e:
-                    logger.error(f"Error loading {filename}: {e}")
-                    
-            # Add new articles
-            all_content = existing_content + new_articles
-            
-            # Save updated content
-            try:
-                with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(all_content, f, indent=2, ensure_ascii=False)
-                logger.info(f"Updated {filename}")
-            except Exception as e:
-                logger.error(f"Error saving {filename}: {e}")
+        # Update monthly content (last 30 days)
+        self.save_content(new_articles, 'monthly_content.json')
+        
+        # Update yearly content (last 365 days)
+        self.save_content(new_articles, 'yearly_content.json')
 
 def main():
     """Main function to run the scraper"""

@@ -1,17 +1,13 @@
-name: Daily Zine Generation & Curation
+name: Daily Zine Generation
 
 on:
   schedule:
     # Run daily at 4:00 AM UTC (adjust timezone as needed)
     - cron: '0 4 * * *'
-    # Run weekly curator every Thursday at 4:00 AM UTC
-    - cron: '0 4 * * 4'
-    # Run monthly curator on the last day of the month at 4:00 AM UTC
-    - cron: '0 4 28-31 * *'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  generate-zine:
+  generate-daily-zine:
     runs-on: ubuntu-latest
     
     steps:
@@ -26,112 +22,63 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install python-dotenv replicate reportlab feedparser requests Pillow
+        pip install python-dotenv reportlab requests Pillow beautifulsoup4
         
     - name: Create ask.env from secrets
       run: |
         cat > ask.env << EOF
         TEXT_PROVIDER=${{ secrets.TEXT_PROVIDER }}
         TEXT_MODEL=${{ secrets.TEXT_MODEL }}
-        NUM_SPREADS=${{ secrets.NUM_SPREADS }}
-        FILTER_KEYWORDS=${{ secrets.FILTER_KEYWORDS }}
-        IMAGE_WIDTH=${{ secrets.IMAGE_WIDTH }}
-        IMAGE_HEIGHT=${{ secrets.IMAGE_HEIGHT }}
-        IMAGE_DPI=${{ secrets.IMAGE_DPI }}
-        CAPTION_POSITION=${{ secrets.CAPTION_POSITION }}
-        NUM_INFERENCE_STEPS=${{ secrets.NUM_INFERENCE_STEPS }}
-        GUIDANCE_SCALE=${{ secrets.GUIDANCE_SCALE }}
-        ZINE_TITLE_TEMPLATE=${{ secrets.ZINE_TITLE_TEMPLATE }}
-        OUTPUT_PATH=${{ secrets.OUTPUT_PATH }}
-        PROMPT_SYSTEM=${{ secrets.PROMPT_SYSTEM }}
-        PROMPT_TEMPLATE=${{ secrets.PROMPT_TEMPLATE }}
-        CAPTION_SYSTEM=${{ secrets.CAPTION_SYSTEM }}
-        CAPTION_TEMPLATE=${{ secrets.CAPTION_TEMPLATE }}
-
+        GROQ_API_BASE=${{ secrets.GROQ_API_BASE }}
+        GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
         TOGETHER_API_BASE=${{ secrets.TOGETHER_API_BASE }}
         TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}
         IMAGE_PROVIDER=${{ secrets.IMAGE_PROVIDER }}
         IMAGE_MODEL=${{ secrets.IMAGE_MODEL }}
-        RSS_FEEDS=${{ secrets.RSS_FEEDS }}
+        IMAGE_WIDTH=${{ secrets.IMAGE_WIDTH }}
+        IMAGE_HEIGHT=${{ secrets.IMAGE_HEIGHT }}
+        INFERENCE_STEPS=${{ secrets.INFERENCE_STEPS }}
+        GUIDANCE_SCALE=${{ secrets.GUIDANCE_SCALE }}
+        PROMPT_SYSTEM=${{ secrets.PROMPT_SYSTEM }}
+        PROMPT_TEMPLATE=${{ secrets.PROMPT_TEMPLATE }}
+        CAPTION_SYSTEM=${{ secrets.CAPTION_SYSTEM }}
+        CAPTION_TEMPLATE=${{ secrets.CAPTION_TEMPLATE }}
         FALLBACK_THEME=${{ secrets.FALLBACK_THEME }}
-        CAPTION_FONT_SIZE=${{ secrets.CAPTION_FONT_SIZE }}
-        CAPTION_LINE_SPACING=${{ secrets.CAPTION_LINE_SPACING }}
+        SCRAPER_TIMEOUT=${{ secrets.SCRAPER_TIMEOUT }}
+        SCRAPER_MAX_RETRIES=${{ secrets.SCRAPER_MAX_RETRIES }}
+        SCRAPER_MAX_WORKERS=${{ secrets.SCRAPER_MAX_WORKERS }}
+        SCRAPER_ARTICLES_PER_SOURCE=${{ secrets.SCRAPER_ARTICLES_PER_SOURCE }}
+        SCRAPER_USER_AGENT=${{ secrets.SCRAPER_USER_AGENT }}
+        SCRAPER_CONTENT_DIR=${{ secrets.SCRAPER_CONTENT_DIR }}
         EOF
         
-    - name: Check day and month for curation
-      id: check-dates
+    - name: Run daily zine generation
       run: |
-        # Check if it's weekend (Saturday or Sunday for weekly curation)
-        if [ "$(date +%u)" = "6" ] || [ "$(date +%u)" = "7" ]; then
-          echo "is_weekend=true" >> $GITHUB_OUTPUT
-        else
-          echo "is_weekend=false" >> $GITHUB_OUTPUT
-        fi
+        python daily_zine_generator.py
         
-        # Check if it's the last day of the month (for monthly curation)
-        current_day=$(date +%d)
-        last_day=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)
-        if [ "$current_day" = "$last_day" ]; then
-          echo "is_last_day_of_month=true" >> $GITHUB_OUTPUT
-        else
-          echo "is_last_day_of_month=false" >> $GITHUB_OUTPUT
-        fi
-        
-        # Check if it's the last day of the year (for yearly curation)
-        current_month=$(date +%m)
-        current_day=$(date +%d)
-        if [ "$current_month" = "12" ] && [ "$current_day" = "31" ]; then
-          echo "is_last_day_of_year=true" >> $GITHUB_OUTPUT
-        else
-          echo "is_last_day_of_year=false" >> $GITHUB_OUTPUT
-        fi
-        
-    - name: Run daily image generation
-      run: |
-        python zine_generator_multi_style.py
-        
-    - name: Run image allocation for PDF curation
-      run: |
-        python image_allocator.py
-        
-    - name: Run weekly curator (Weekends only)
-      if: steps.check-dates.outputs.is_weekend == 'true'
-      run: |
-        python weekly_curator.py
-        
-    - name: Run monthly curator (last day of month only)
-      if: steps.check-dates.outputs.is_last_day_of_month == 'true'
-      run: |
-        python monthly_curator.py
-        
-    - name: Run yearly curator (last day of year only)
-      if: steps.check-dates.outputs.is_last_day_of_year == 'true'
-      run: |
-        python yearly_curator.py
-        
-
-        
-    - name: Upload generated images
+    - name: Upload generated content
       uses: actions/upload-artifact@v3
       with:
-        name: generated-content-${{ github.run_number }}
+        name: daily-zine-${{ github.run_number }}
         path: |
           images/
           captions/
-          digital_pdfs/
+          daily_pdfs/
+          scraped_content/
+          logs/
         retention-days: 14
         
     - name: Commit and push generated content
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add images/ captions/ digital_pdfs/
-        git diff --quiet && git diff --staged --quiet || git commit -m "Auto-generated content - ${{ github.run_number }}"
+        git add images/ captions/ daily_pdfs/ scraped_content/ logs/
+        git diff --quiet && git diff --staged --quiet || git commit -m "Daily zine generation - ${{ github.run_number }}"
         git push
         
     - name: Create summary
       run: |
-        echo "## Content Generation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## Daily Zine Generation Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
         echo "**Generated:** $(date)" >> $GITHUB_STEP_SUMMARY
@@ -139,23 +86,19 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Generated Content:" >> $GITHUB_STEP_SUMMARY
         if [ -d "images" ]; then
-          echo "- **Daily Images:** $(find images -name "*.jpg" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+          echo "- **Images:** $(find images -name "*.jpg" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
-                                     if [ -d "captions" ]; then
+        if [ -d "captions" ]; then
           echo "- **Captions:** $(find captions -name "*.txt" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
-        if [ -d "digital_pdfs" ]; then
-          echo "- **Digital PDFs:** $(find digital_pdfs -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
+        if [ -d "daily_pdfs" ]; then
+          echo "- **Daily PDFs:** $(find daily_pdfs -name "*.pdf" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
-        if [ "$(date +%u)" = "6" ] || [ "$(date +%u)" = "7" ]; then
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**📚 Weekly PDF curation completed!**" >> $GITHUB_STEP_SUMMARY
+        if [ -d "scraped_content" ]; then
+          echo "- **Scraped Articles:** $(find scraped_content -name "*.json" | wc -l) files" >> $GITHUB_STEP_SUMMARY
         fi
-        if [ "$(date +%d)" = "$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)" ]; then
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**📚 Monthly PDF curation completed!**" >> $GITHUB_STEP_SUMMARY
-        fi
-        if [ "$(date +%m)" = "12" ] && [ "$(date +%d)" = "31" ]; then
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**📅 Yearly PDF curation completed!**" >> $GITHUB_STEP_SUMMARY
-        fi 
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**🎨 Daily zine generation completed!**" >> $GITHUB_STEP_SUMMARY
+        echo "**📄 50 full-bleed images in one style**" >> $GITHUB_STEP_SUMMARY
+        echo "**📝 50 poetic captions**" >> $GITHUB_STEP_SUMMARY
+        echo "**📚 1 comprehensive PDF**" >> $GITHUB_STEP_SUMMARY 
