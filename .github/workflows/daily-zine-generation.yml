@@ -47,8 +47,7 @@ jobs:
         PROMPT_TEMPLATE=${{ secrets.PROMPT_TEMPLATE }}
         CAPTION_SYSTEM=${{ secrets.CAPTION_SYSTEM }}
         CAPTION_TEMPLATE=${{ secrets.CAPTION_TEMPLATE }}
-        GROQ_API_BASE=${{ secrets.GROQ_API_BASE }}
-        GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+
         TOGETHER_API_BASE=${{ secrets.TOGETHER_API_BASE }}
         TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}
         IMAGE_PROVIDER=${{ secrets.IMAGE_PROVIDER }}

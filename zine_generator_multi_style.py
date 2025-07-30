@@ -168,7 +168,7 @@ STYLE_MODELS = {
 }
 
 # === 🔧 Performance and Configuration Settings ===
-TEXT_PROVIDER = get_env("TEXT_PROVIDER", "groq")
+TEXT_PROVIDER = get_env("TEXT_PROVIDER", "together")
 TEXT_MODEL = get_env("TEXT_MODEL", required=True)
 IMAGE_PROVIDER = get_env("IMAGE_PROVIDER", "together")
 IMAGE_MODEL = get_env("IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
@@ -192,12 +192,10 @@ rate_limiter = RateLimiter(RATE_LIMIT_PER_MINUTE)
 
 # === API Keys and Endpoints ===
 API_BASES = {
-    "groq": get_env("GROQ_API_BASE", "https://api.groq.com/openai/v1"),
     "together": get_env("TOGETHER_API_BASE", "https://api.together.xyz/v1")
 }
 API_KEYS = {
-    "groq": get_env("GROQ_API_KEY", required=True),
-    "together": get_env("TOGETHER_API_KEY")
+    "together": get_env("TOGETHER_API_KEY", required=True)
 }
 
 HEADERS = {
