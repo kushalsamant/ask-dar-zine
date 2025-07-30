@@ -125,7 +125,9 @@ def get_daily_style():
     today = datetime.now()
     day_of_year = today.timetuple().tm_yday
     style_index = day_of_year % len(STYLES)
-    return STYLES[style_index]
+    selected_style = STYLES[style_index]
+    time.sleep(1)  # Rate limiting
+    return selected_style
 
 # === 🌐 Web Scraping ===
 def scrape_architectural_content():
@@ -146,17 +148,20 @@ def scrape_architectural_content():
             if themes:
                 selected_theme = random.choice(themes)
                 log.info(f"🎯 Selected theme from web scraping: {selected_theme}")
+                time.sleep(1)  # Rate limiting
                 return selected_theme
         
         # Fallback theme
         fallback_theme = get_env('FALLBACK_THEME', 'Modern Architecture')
         log.info(f"🎯 Using fallback theme: {fallback_theme}")
+        time.sleep(1)  # Rate limiting
         return fallback_theme
         
     except Exception as e:
         log.error(f"❌ Web scraping failed: {e}")
         fallback_theme = get_env('FALLBACK_THEME', 'Modern Architecture')
         log.info(f"🎯 Using fallback theme: {fallback_theme}")
+        time.sleep(1)  # Rate limiting
         return fallback_theme
 
 # === 🤖 LLM Integration ===
@@ -190,7 +195,9 @@ def call_llm(prompt, system_prompt=None):
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         response.raise_for_status()
         data = response.json()
-        return data['choices'][0]['message']['content'].strip()
+        result = data['choices'][0]['message']['content'].strip()
+        time.sleep(1)  # Rate limiting
+        return result
     except Exception as e:
         log.error(f"❌ LLM call failed: {e}")
         return None
@@ -206,6 +213,7 @@ def generate_prompts(theme, num_prompts=50):
         # Split into individual prompts
         prompts = [line.strip() for line in response.split('\n') if line.strip()]
         log.info(f"✅ Generated {len(prompts)} prompts")
+        time.sleep(1)  # Rate limiting
         return prompts[:num_prompts]  # Ensure we get exactly 50
     else:
         log.error("❌ Failed to generate prompts")
@@ -220,12 +228,16 @@ def generate_caption(prompt):
         # Ensure exactly 6 lines
         lines = [line.strip() for line in response.split('\n') if line.strip()]
         if len(lines) >= 6:
-            return '\n'.join(lines[:6])
+            result = '\n'.join(lines[:6])
+            time.sleep(1)  # Rate limiting
+            return result
         else:
             # Pad with generic lines if needed
             while len(lines) < 6:
                 lines.append("Architecture speaks through silent spaces")
-            return '\n'.join(lines[:6])
+            result = '\n'.join(lines[:6])
+            time.sleep(1)  # Rate limiting
+            return result
     else:
         # Fallback caption
         return "Architecture speaks through silent spaces\nForm follows function in perfect harmony\nLight dances across geometric surfaces\nHuman scale meets monumental vision\nMaterials tell stories of creation\nSpace becomes poetry in motion"
@@ -293,6 +305,7 @@ def generate_single_image(prompt, style_name, image_number):
                                 f.write(image_response.content)
                             
                             log.info(f"✅ Generated {style_name} image {image_number}: {image_filename}")
+                            time.sleep(1)  # Rate limiting
                             return image_path
                         else:
                             log.error(f"❌ Failed to download image from {image_url}")
@@ -353,57 +366,47 @@ def generate_all_captions(prompts):
         caption = generate_caption(prompt)
         captions.append(caption)
         log.info(f"✅ Caption {i+1}/{len(prompts)} generated")
+        time.sleep(1)  # Rate limiting between captions
     
     return captions
 
 # === 📄 PDF Generation ===
-def place_caption_with_bands(c, caption, w, h, page_number):
-    """Place caption with white band and transparent band at bottom"""
+def place_caption_with_white_band(c, caption, w, h, page_num):
+    """
+    Draw a 100% white band at the bottom of the page, overlay the caption (left) and page number (right).
+    The band is flush with the bottom of the page.
+    """
     text = caption.split('\n')
     font_size = 14
     line_spacing = 18
-    
+    padding_x = 24
+    padding_y = 16
+
     # Calculate text dimensions
     c.setFont("Helvetica-Bold", font_size)
     text_width = max(c.stringWidth(line, "Helvetica-Bold", font_size) for line in text)
     text_height = len(text) * line_spacing
-    
-    # Band dimensions
-    white_band_height = text_height + 20  # Text height + padding
-    transparent_band_height = white_band_height  # Same size as white band
-    band_margin_bottom = white_band_height  # Distance from bottom = band height
-    
-    # Calculate band positions
-    white_band_y = band_margin_bottom + transparent_band_height
-    transparent_band_y = band_margin_bottom
-    
-    # Draw transparent band (bottom)
-    c.saveState()
-    c.setFillColorRGB(0, 0, 0, alpha=0.25)
-    c.rect(0, transparent_band_y, w, transparent_band_height, fill=1, stroke=0)
-    c.restoreState()
-    
-    # Draw white band (above transparent band)
-    c.saveState()
-    c.setFillColorRGB(1, 1, 1, alpha=1.0)
-    c.rect(0, white_band_y, w, white_band_height, fill=1, stroke=0)
-    c.restoreState()
-    
-    # Draw caption (left) and page number (right) in white band
-    c.saveState()
+
+    band_height = text_height + 2 * padding_y
+    band_y = 0  # flush with the bottom of the page
+    band_x = 0
+    band_width = w
+
+    # Draw white band
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(band_x, band_y, band_width, band_height, fill=1, stroke=0)
+
+    # Draw caption (left-aligned, vertically centered in band)
     c.setFont("Helvetica-Bold", font_size)
     c.setFillColorRGB(0, 0, 0)
-    
-    # Draw caption lines
     for i, line in enumerate(text):
-        y = white_band_y + white_band_height - 10 - i * line_spacing - font_size
-        c.drawString(20, y, line)
-    
-    # Draw page number (right-aligned)
-    page_str = f"{page_number}"
-    c.setFont("Helvetica-Bold", font_size)
-    c.drawRightString(w - 20, white_band_y + white_band_height - 10 - font_size, page_str)
-    c.restoreState()
+        y = band_y + band_height - padding_y - (len(text) - i - 1) * line_spacing
+        c.drawString(band_x + padding_x, y, line)
+
+    # Draw page number (right-aligned, at the bottom of the white band)
+    page_str = str(page_num)
+    c.setFont("Helvetica", font_size)
+    c.drawRightString(band_x + band_width - padding_x, band_y + padding_y, page_str)
 
 def create_daily_pdf(images, captions, style_name, theme):
     """Create the daily PDF with all images and captions"""
@@ -452,8 +455,8 @@ def create_daily_pdf(images, captions, style_name, theme):
             # Add image to PDF (full bleed)
             c.drawImage(image_path, -20, -20, width=w+40, height=h+40)
             
-            # Add caption with bands and page number
-            place_caption_with_bands(c, caption, w, h, page_count + 1)
+            # Add caption with white band and page number
+            place_caption_with_white_band(c, caption, w, h, i + 1)
             
             c.showPage()
             page_count += 1
@@ -482,11 +485,13 @@ def main():
     # Step 1: Scrape web for architectural content
     log.info("📡 Step 1: Scraping web for architectural content")
     theme = scrape_architectural_content()
+    time.sleep(1)  # Rate limiting
     
     # Step 2: Select daily style
     log.info("🎨 Step 2: Selecting daily style")
     style_name = get_daily_style()
     log.info(f"🎯 Selected style: {style_name.upper()}")
+    time.sleep(1)  # Rate limiting
     
     # Step 3: Generate 50 prompts
     log.info("✍️ Step 3: Generating 50 prompts")
@@ -494,6 +499,7 @@ def main():
     if not prompts:
         log.error("❌ Failed to generate prompts")
         return
+    time.sleep(1)  # Rate limiting
     
     # Step 4: Generate 50 images in one style
     log.info("🖼️ Step 4: Generating 50 images")
@@ -501,10 +507,12 @@ def main():
     if not images:
         log.error("❌ Failed to generate images")
         return
+    time.sleep(1)  # Rate limiting
     
     # Step 5: Generate captions
     log.info("📝 Step 5: Generating captions")
     captions = generate_all_captions(prompts)
+    time.sleep(1)  # Rate limiting
     
     # Step 6 & 7: Create PDF
     log.info("📄 Step 6 & 7: Creating PDF")
