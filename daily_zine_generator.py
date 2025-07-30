@@ -111,7 +111,7 @@ CAPTION_TEMPLATE = get_env('CAPTION_TEMPLATE', 'Write exactly 6 lines, each cont
 # Style configuration for the selected style
 STYLE_CONFIG = {
     'futuristic': {
-        'model': 'black-forest-labs/flux-1-schnell',
+        'model': 'black-forest-labs/FLUX.1-schnell-free',
         'prompt_suffix': ', futuristic architecture, sci-fi aesthetic, glowing lights, sleek surfaces, advanced technology, architectural innovation',
         'negative_prompt': 'traditional, classical, rustic, old, vintage, historical, medieval, gothic'
     }
@@ -267,7 +267,7 @@ def generate_single_image(prompt, style_name, image_number):
     
     # Get style configuration
     style_config = STYLE_CONFIG.get(style_name, {
-        'model': IMAGE_MODEL,
+        'model': 'black-forest-labs/FLUX.1-schnell-free',  # Use free model as default
         'prompt_suffix': f', {style_name} style, architectural beauty',
         'negative_prompt': 'blurry, low quality, distorted'
     })
