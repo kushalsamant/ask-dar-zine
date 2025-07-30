@@ -27,23 +27,28 @@ jobs:
     - name: Create ask.env from secrets
       run: |
         cat > ask.env << EOF
-        TEXT_PROVIDER=${{ secrets.TEXT_PROVIDER }}
-        TEXT_MODEL=${{ secrets.TEXT_MODEL }}
-        GROQ_API_BASE=${{ secrets.GROQ_API_BASE }}
-        GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+        # === Text Generation (Free Together.ai) ===
+        TEXT_PROVIDER=together
+        TEXT_MODEL=meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
         TOGETHER_API_BASE=${{ secrets.TOGETHER_API_BASE }}
         TOGETHER_API_KEY=${{ secrets.TOGETHER_API_KEY }}
-        IMAGE_PROVIDER=${{ secrets.IMAGE_PROVIDER }}
-        IMAGE_MODEL=${{ secrets.IMAGE_MODEL }}
+        
+        # === Image Generation (Free Together.ai) ===
+        IMAGE_PROVIDER=together
+        IMAGE_MODEL=black-forest-labs/FLUX.1-schnell-free
         IMAGE_WIDTH=${{ secrets.IMAGE_WIDTH }}
         IMAGE_HEIGHT=${{ secrets.IMAGE_HEIGHT }}
         INFERENCE_STEPS=${{ secrets.INFERENCE_STEPS }}
         GUIDANCE_SCALE=${{ secrets.GUIDANCE_SCALE }}
+        
+        # === Prompt Configuration ===
         PROMPT_SYSTEM=${{ secrets.PROMPT_SYSTEM }}
         PROMPT_TEMPLATE=${{ secrets.PROMPT_TEMPLATE }}
         CAPTION_SYSTEM=${{ secrets.CAPTION_SYSTEM }}
         CAPTION_TEMPLATE=${{ secrets.CAPTION_TEMPLATE }}
         FALLBACK_THEME=${{ secrets.FALLBACK_THEME }}
+        
+        # === Web Scraper Configuration ===
         SCRAPER_TIMEOUT=${{ secrets.SCRAPER_TIMEOUT }}
         SCRAPER_MAX_RETRIES=${{ secrets.SCRAPER_MAX_RETRIES }}
         SCRAPER_MAX_WORKERS=${{ secrets.SCRAPER_MAX_WORKERS }}
