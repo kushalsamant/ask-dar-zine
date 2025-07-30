@@ -344,37 +344,48 @@ def generate_single_image(prompt, style_name, image_number):
     return None
 
 def generate_all_images(prompts, style_name):
-    """Generate all 50 images sequentially"""
-    log.info(f"🎨 Starting generation of {len(prompts)} images for {style_name} style")
+    """Generate all 50 images sequentially - completely linear"""
+    log.info(f"🎨 Starting sequential generation of {len(prompts)} images for {style_name} style")
     
     images = []
     for i, prompt in enumerate(prompts):
+        log.info(f"🔄 Processing image {i+1}/{len(prompts)}")
         try:
             image_path = generate_single_image(prompt, style_name, i+1)
             if image_path:
                 images.append(image_path)
-                log.info(f"✅ Image {i+1}/{len(prompts)} completed")
+                log.info(f"✅ Image {i+1}/{len(prompts)} completed successfully")
             else:
-                log.error(f"❌ Image {i+1} failed")
+                log.error(f"❌ Image {i+1} failed to generate")
         except Exception as e:
-            log.error(f"❌ Image {i+1} failed: {e}")
+            log.error(f"❌ Image {i+1} failed with error: {e}")
         
-        time.sleep(1)  # Rate limiting between images
+        # Rate limiting between images
+        if i < len(prompts) - 1:  # Don't sleep after the last image
+            log.info(f"⏳ Waiting 1 second before next image...")
+            time.sleep(1)
     
+    log.info(f"🎉 Sequential image generation complete: {len(images)}/{len(prompts)} images generated")
     return images
 
 # === 📝 Caption Generation ===
 def generate_all_captions(prompts):
-    """Generate captions for all prompts"""
-    log.info(f"📝 Generating captions for {len(prompts)} prompts")
+    """Generate captions for all prompts sequentially - completely linear"""
+    log.info(f"📝 Starting sequential caption generation for {len(prompts)} prompts")
     
     captions = []
     for i, prompt in enumerate(prompts):
+        log.info(f"🔄 Processing caption {i+1}/{len(prompts)}")
         caption = generate_caption(prompt)
         captions.append(caption)
-        log.info(f"✅ Caption {i+1}/{len(prompts)} generated")
-        time.sleep(1)  # Rate limiting between captions
+        log.info(f"✅ Caption {i+1}/{len(prompts)} generated successfully")
+        
+        # Rate limiting between captions
+        if i < len(prompts) - 1:  # Don't sleep after the last caption
+            log.info(f"⏳ Waiting 1 second before next caption...")
+            time.sleep(1)
     
+    log.info(f"🎉 Sequential caption generation complete: {len(captions)}/{len(prompts)} captions generated")
     return captions
 
 # === 📄 PDF Generation ===
@@ -520,52 +531,72 @@ def create_daily_pdf(images, captions, style_name, theme):
 
 # === 🚀 Main Function ===
 def main():
-    """Main function to run the daily zine generation"""
-    log.info("🚀 Starting Daily Zine Generator")
+    """Main function to run the daily zine generation - completely linear pipeline"""
+    log.info("🚀 Starting Daily Zine Generator - Linear Pipeline")
+    log.info("📋 Pipeline: Web Scraping → Style Selection → Prompt Generation → Image Generation → Caption Generation → PDF Creation")
     
     # Step 1: Scrape web for architectural content
-    log.info("📡 Step 1: Scraping web for architectural content")
+    log.info("=" * 60)
+    log.info("📡 STEP 1/6: Scraping web for architectural content")
+    log.info("=" * 60)
     theme = scrape_architectural_content()
-    time.sleep(1)  # Rate limiting
+    log.info(f"🎯 Theme selected: {theme}")
+    time.sleep(2)  # Rate limiting between major steps
     
     # Step 2: Select daily style
-    log.info("🎨 Step 2: Selecting daily style")
+    log.info("=" * 60)
+    log.info("🎨 STEP 2/6: Selecting daily style")
+    log.info("=" * 60)
     style_name = get_daily_style()
     log.info(f"🎯 Selected style: {style_name.upper()}")
-    time.sleep(1)  # Rate limiting
+    time.sleep(2)  # Rate limiting between major steps
     
     # Step 3: Generate 50 prompts
-    log.info("✍️ Step 3: Generating 50 prompts")
+    log.info("=" * 60)
+    log.info("✍️ STEP 3/6: Generating 50 prompts")
+    log.info("=" * 60)
     prompts = generate_prompts(theme, 50)
     if not prompts:
         log.error("❌ Failed to generate prompts")
         return
-    time.sleep(1)  # Rate limiting
+    log.info(f"✅ Generated {len(prompts)} prompts")
+    time.sleep(2)  # Rate limiting between major steps
     
-    # Step 4: Generate 50 images in one style
-    log.info("🖼️ Step 4: Generating 50 images")
+    # Step 4: Generate 50 images in one style (sequential)
+    log.info("=" * 60)
+    log.info("🖼️ STEP 4/6: Generating 50 images sequentially")
+    log.info("=" * 60)
     images = generate_all_images(prompts, style_name)
     if not images:
         log.error("❌ Failed to generate images")
         return
-    time.sleep(1)  # Rate limiting
+    log.info(f"✅ Generated {len(images)} images")
+    time.sleep(2)  # Rate limiting between major steps
     
-    # Step 5: Generate captions
-    log.info("📝 Step 5: Generating captions")
+    # Step 5: Generate captions (sequential)
+    log.info("=" * 60)
+    log.info("📝 STEP 5/6: Generating captions sequentially")
+    log.info("=" * 60)
     captions = generate_all_captions(prompts)
-    time.sleep(1)  # Rate limiting
+    log.info(f"✅ Generated {len(captions)} captions")
+    time.sleep(2)  # Rate limiting between major steps
     
-    # Step 6 & 7: Create PDF
-    log.info("📄 Step 6 & 7: Creating PDF")
+    # Step 6: Create PDF
+    log.info("=" * 60)
+    log.info("📄 STEP 6/6: Creating PDF")
+    log.info("=" * 60)
     pdf_path = create_daily_pdf(images, captions, style_name, theme)
     
     if pdf_path:
-        log.info(f"🎉 Daily zine generation complete!")
+        log.info("=" * 60)
+        log.info("🎉 LINEAR PIPELINE COMPLETED SUCCESSFULLY!")
+        log.info("=" * 60)
         log.info(f"📁 PDF: {pdf_path}")
         log.info(f"🎨 Style: {style_name.upper()}")
         log.info(f"📊 Images: {len(images)}")
         log.info(f"📝 Captions: {len(captions)}")
         log.info(f"🎯 Theme: {theme}")
+        log.info("✅ All steps completed in strict sequential order!")
     else:
         log.error("❌ Failed to create daily PDF")
 

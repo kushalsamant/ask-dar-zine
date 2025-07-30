@@ -7,7 +7,7 @@ import time
 import random
 from dotenv import load_dotenv
 import logging
-import concurrent.futures
+
 from urllib.parse import urljoin, urlparse
 
 # Load environment variables
@@ -218,29 +218,27 @@ class WebScraper:
         return articles
 
     def scrape_all_sources(self):
-        """Scrape articles from all architectural sources"""
+        """Scrape articles from all architectural sources sequentially"""
         sources = [
-            self.scrape_archdaily,
-            self.scrape_designboom,
-            self.scrape_architizer,
-            self.scrape_interior_design,
-            self.scrape_architectural_record
+            ('ArchDaily', self.scrape_archdaily),
+            ('DesignBoom', self.scrape_designboom),
+            ('Architizer', self.scrape_architizer),
+            ('Interior Design', self.scrape_interior_design),
+            ('Architectural Record', self.scrape_architectural_record)
         ]
         
         all_articles = []
         
-        # Use ThreadPoolExecutor for concurrent scraping
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_source = {executor.submit(source): source.__name__ for source in sources}
-            
-            for future in concurrent.futures.as_completed(future_to_source):
-                source_name = future_to_source[future]
-                try:
-                    articles = future.result()
-                    all_articles.extend(articles)
-                    logger.info(f"Scraped {len(articles)} articles from {source_name}")
-                except Exception as e:
-                    logger.error(f"❌ Error scraping {source_name}: {e}")
+        # Scrape sources sequentially
+        for source_name, source_func in sources:
+            try:
+                logger.info(f"📡 Scraping {source_name}...")
+                articles = source_func()
+                all_articles.extend(articles)
+                logger.info(f"✅ Scraped {len(articles)} articles from {source_name}")
+                time.sleep(2)  # Rate limiting between sources
+            except Exception as e:
+                logger.error(f"❌ Error scraping {source_name}: {e}")
         
         # Remove duplicates based on title
         seen_titles = set()
