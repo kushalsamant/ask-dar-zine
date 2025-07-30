@@ -170,9 +170,15 @@ def call_llm(prompt, system_prompt=None):
     if TEXT_PROVIDER == 'groq':
         url = f"{GROQ_API_BASE}/chat/completions"
         api_key = GROQ_API_KEY
+        model = TEXT_MODEL
     else:
         url = f"{TOGETHER_API_BASE}/chat/completions"
         api_key = TOGETHER_API_KEY
+        # Together.ai uses different model naming
+        if 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free' in TEXT_MODEL:
+            model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free'
+        else:
+            model = TEXT_MODEL
     
     messages = []
     if system_prompt:
@@ -180,7 +186,7 @@ def call_llm(prompt, system_prompt=None):
     messages.append({"role": "user", "content": prompt})
     
     payload = {
-        "model": TEXT_MODEL,
+        "model": model,
         "messages": messages,
         "max_tokens": 2000,
         "temperature": 0.8
