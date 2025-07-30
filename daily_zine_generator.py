@@ -21,7 +21,7 @@ import requests
 import base64
 from datetime import datetime
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 # === 🔧 Setup real-time logging ===
 LOG_DIR = "logs"
@@ -75,7 +75,6 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from PIL import Image
-import concurrent.futures
 
 # === 📥 Load environment variables ===
 load_dotenv('ask.env')
@@ -345,31 +344,24 @@ def generate_single_image(prompt, style_name, image_number):
     return None
 
 def generate_all_images(prompts, style_name):
-    """Generate all 50 images using ThreadPoolExecutor"""
+    """Generate all 50 images sequentially"""
     log.info(f"🎨 Starting generation of {len(prompts)} images for {style_name} style")
     
     images = []
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        future_to_prompt = {
-            executor.submit(generate_single_image, prompt, style_name, i+1): i 
-            for i, prompt in enumerate(prompts)
-        }
+    for i, prompt in enumerate(prompts):
+        try:
+            image_path = generate_single_image(prompt, style_name, i+1)
+            if image_path:
+                images.append(image_path)
+                log.info(f"✅ Image {i+1}/{len(prompts)} completed")
+            else:
+                log.error(f"❌ Image {i+1} failed")
+        except Exception as e:
+            log.error(f"❌ Image {i+1} failed: {e}")
         
-        for future in as_completed(future_to_prompt):
-            image_index = future_to_prompt[future]
-            try:
-                image_path = future.result()
-                if image_path:
-                    images.append((image_index, image_path))
-                    log.info(f"✅ Image {image_index+1}/{len(prompts)} completed")
-                else:
-                    log.error(f"❌ Image {image_index+1} failed")
-            except Exception as e:
-                log.error(f"❌ Image {image_index+1} failed: {e}")
+        time.sleep(1)  # Rate limiting between images
     
-    # Sort by index to maintain order
-    images.sort(key=lambda x: x[0])
-    return [img[1] for img in images]
+    return images
 
 # === 📝 Caption Generation ===
 def generate_all_captions(prompts):
