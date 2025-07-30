@@ -124,9 +124,13 @@ STYLES = ['futuristic', 'minimalist', 'sketch', 'abstract', 'technical', 'waterc
 
 def get_daily_style():
     """Get the style for today based on date"""
+    time.sleep(1)  # Rate limiting before function start
     today = datetime.now()
+    time.sleep(1)  # Rate limiting
     day_of_year = today.timetuple().tm_yday
+    time.sleep(1)  # Rate limiting
     style_index = day_of_year % len(STYLES)
+    time.sleep(1)  # Rate limiting
     selected_style = STYLES[style_index]
     time.sleep(1)  # Rate limiting
     return selected_style
@@ -134,34 +138,45 @@ def get_daily_style():
 # === 🌐 Web Scraping ===
 def scrape_architectural_content():
     """Scrape architectural content for theme generation"""
+    time.sleep(1)  # Rate limiting before function start
     try:
         from web_scraper import WebScraper
+        time.sleep(1)  # Rate limiting
         scraper = WebScraper()
+        time.sleep(1)  # Rate limiting
         articles = scraper.scrape_all_sources()
+        time.sleep(1)  # Rate limiting
         
         if articles:
             # Extract themes from article titles
             themes = []
+            time.sleep(1)  # Rate limiting
             for article in articles[:20]:  # Use top 20 articles
                 title = article.get('title', '')
+                time.sleep(1)  # Rate limiting
                 if len(title) > 10:
                     themes.append(title)
+                    time.sleep(1)  # Rate limiting
             
             if themes:
                 selected_theme = random.choice(themes)
+                time.sleep(1)  # Rate limiting
                 log.info(f"🎯 Selected theme from web scraping: {selected_theme}")
                 time.sleep(1)  # Rate limiting
                 return selected_theme
         
         # Fallback theme
         fallback_theme = get_env('FALLBACK_THEME', 'Modern Architecture')
+        time.sleep(1)  # Rate limiting
         log.info(f"🎯 Using fallback theme: {fallback_theme}")
         time.sleep(1)  # Rate limiting
         return fallback_theme
         
     except Exception as e:
         log.error(f"❌ Web scraping failed: {e}")
+        time.sleep(1)  # Rate limiting
         fallback_theme = get_env('FALLBACK_THEME', 'Modern Architecture')
+        time.sleep(1)  # Rate limiting
         log.info(f"🎯 Using fallback theme: {fallback_theme}")
         time.sleep(1)  # Rate limiting
         return fallback_theme
@@ -169,23 +184,35 @@ def scrape_architectural_content():
 # === 🤖 LLM Integration ===
 def call_llm(prompt, system_prompt=None):
     """Call LLM API based on provider"""
+    time.sleep(1)  # Rate limiting before function start
+    
     if TEXT_PROVIDER == 'groq':
         url = f"{GROQ_API_BASE}/chat/completions"
+        time.sleep(1)  # Rate limiting
         api_key = GROQ_API_KEY
+        time.sleep(1)  # Rate limiting
         model = TEXT_MODEL
+        time.sleep(1)  # Rate limiting
     else:
         url = f"{TOGETHER_API_BASE}/chat/completions"
+        time.sleep(1)  # Rate limiting
         api_key = TOGETHER_API_KEY
+        time.sleep(1)  # Rate limiting
         # Together.ai uses different model naming
         if 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free' in TEXT_MODEL:
             model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free'
+            time.sleep(1)  # Rate limiting
         else:
             model = TEXT_MODEL
+            time.sleep(1)  # Rate limiting
     
     messages = []
+    time.sleep(1)  # Rate limiting
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
+        time.sleep(1)  # Rate limiting
     messages.append({"role": "user", "content": prompt})
+    time.sleep(1)  # Rate limiting
     
     payload = {
         "model": model,
@@ -193,55 +220,73 @@ def call_llm(prompt, system_prompt=None):
         "max_tokens": 2000,
         "temperature": 0.8
     }
+    time.sleep(1)  # Rate limiting
     
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
+    time.sleep(1)  # Rate limiting
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
+        time.sleep(1)  # Rate limiting
         response.raise_for_status()
+        time.sleep(1)  # Rate limiting
         data = response.json()
+        time.sleep(1)  # Rate limiting
         result = data['choices'][0]['message']['content'].strip()
         time.sleep(1)  # Rate limiting
         return result
     except Exception as e:
         log.error(f"❌ LLM call failed: {e}")
+        time.sleep(1)  # Rate limiting
         return None
 
 def generate_prompts(theme, num_prompts=50):
     """Generate 50 architectural image prompts"""
+    time.sleep(1)  # Rate limiting before function start
     log.info(f"🎨 Generating {num_prompts} prompts for theme: {theme}")
+    time.sleep(1)  # Rate limiting
     
     prompt = PROMPT_TEMPLATE.format(n=num_prompts, theme=theme)
+    time.sleep(1)  # Rate limiting
     response = call_llm(prompt, PROMPT_SYSTEM)
+    time.sleep(1)  # Rate limiting
     
     if response:
         # Split into individual prompts
         prompts = [line.strip() for line in response.split('\n') if line.strip()]
+        time.sleep(1)  # Rate limiting
         log.info(f"✅ Generated {len(prompts)} prompts")
         time.sleep(1)  # Rate limiting
         return prompts[:num_prompts]  # Ensure we get exactly 50
     else:
         log.error("❌ Failed to generate prompts")
+        time.sleep(1)  # Rate limiting
         return []
 
 def generate_caption(prompt):
     """Generate a 6-line caption for an image prompt"""
+    time.sleep(1)  # Rate limiting before function start
     caption_prompt = CAPTION_TEMPLATE.format(prompt=prompt)
+    time.sleep(1)  # Rate limiting
     response = call_llm(caption_prompt, CAPTION_SYSTEM)
+    time.sleep(1)  # Rate limiting
     
     if response:
         # Clean the response to remove AI-generated text
         lines = []
+        time.sleep(1)  # Rate limiting
         for line in response.split('\n'):
             line = line.strip()
+            time.sleep(1)  # Rate limiting
             if line and not any(ai_text in line.lower() for ai_text in [
                 "here is a", "caption that meets", "requirements:", "ai generated", 
                 "artificial intelligence", "generated by", "created by ai"
             ]):
                 lines.append(line)
+                time.sleep(1)  # Rate limiting
         
         # Ensure exactly 6 lines
         if len(lines) >= 6:
@@ -252,20 +297,26 @@ def generate_caption(prompt):
             # Pad with generic lines if needed
             while len(lines) < 6:
                 lines.append("Architecture speaks through silent spaces")
+                time.sleep(1)  # Rate limiting
             result = '\n'.join(lines[:6])
             time.sleep(1)  # Rate limiting
             return result
     else:
         # Fallback caption
+        time.sleep(1)  # Rate limiting
         return "Architecture speaks through silent spaces\nForm follows function in perfect harmony\nLight dances across geometric surfaces\nHuman scale meets monumental vision\nMaterials tell stories of creation\nSpace becomes poetry in motion"
 
 # === 🖼️ Image Generation ===
 def generate_single_image(prompt, style_name, image_number):
     """Generate a single image using Together.ai API"""
+    time.sleep(1)  # Rate limiting before function start
     log.info(f"🎨 Generating {style_name} image {image_number}")
+    time.sleep(1)  # Rate limiting
     
     style_dir = os.path.join("images", style_name)
+    time.sleep(1)  # Rate limiting
     os.makedirs(style_dir, exist_ok=True)
+    time.sleep(1)  # Rate limiting
     
     # Get style configuration
     style_config = STYLE_CONFIG.get(style_name, {
@@ -273,11 +324,15 @@ def generate_single_image(prompt, style_name, image_number):
         'prompt_suffix': f', {style_name} style, architectural beauty',
         'negative_prompt': 'blurry, low quality, distorted'
     })
+    time.sleep(1)  # Rate limiting
     
     full_prompt = f"{prompt}{style_config['prompt_suffix']}"
+    time.sleep(1)  # Rate limiting
     negative_prompt = style_config['negative_prompt']
+    time.sleep(1)  # Rate limiting
     
     together_api_url = "https://api.together.xyz/v1/images/generations"
+    time.sleep(1)  # Rate limiting
     
     payload = {
         "model": style_config['model'],
@@ -289,15 +344,19 @@ def generate_single_image(prompt, style_name, image_number):
         "guidance_scale": GUIDANCE_SCALE,
         "seed": random.randint(1, 1000000)
     }
+    time.sleep(1)  # Rate limiting
     
     headers = {
         "Authorization": f"Bearer {TOGETHER_API_KEY}",
         "Content-Type": "application/json"
     }
+    time.sleep(1)  # Rate limiting
     
     for attempt in range(3):
+        time.sleep(1)  # Rate limiting before attempt
         try:
             log.info(f"🔄 Attempt {attempt + 1}/3 for {style_name} image {image_number}")
+            time.sleep(1)  # Rate limiting
             
             response = requests.post(
                 together_api_url,
@@ -305,45 +364,62 @@ def generate_single_image(prompt, style_name, image_number):
                 json=payload,
                 timeout=120
             )
+            time.sleep(1)  # Rate limiting
             
             if response.status_code == 200:
                 data = response.json()
+                time.sleep(1)  # Rate limiting
                 if 'data' in data and len(data['data']) > 0:
                     image_data = data['data'][0]
+                    time.sleep(1)  # Rate limiting
                     if 'url' in image_data:
                         image_url = image_data['url']
+                        time.sleep(1)  # Rate limiting
                         image_response = requests.get(image_url, timeout=60)
+                        time.sleep(1)  # Rate limiting
                         if image_response.status_code == 200:
                             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            time.sleep(1)  # Rate limiting
                             image_filename = f"{style_name}_image_{image_number:02d}_{timestamp}.jpg"
+                            time.sleep(1)  # Rate limiting
                             image_path = os.path.join(style_dir, image_filename)
+                            time.sleep(1)  # Rate limiting
                             
                             with open(image_path, 'wb') as f:
                                 f.write(image_response.content)
+                            time.sleep(1)  # Rate limiting
                             
                             log.info(f"✅ Generated {style_name} image {image_number}: {image_filename}")
                             time.sleep(1)  # Rate limiting
                             return image_path
                         else:
                             log.error(f"❌ Failed to download image from {image_url}")
+                            time.sleep(1)  # Rate limiting
                     else:
                         log.error(f"❌ No image URL in response for {style_name} image {image_number}")
+                        time.sleep(1)  # Rate limiting
                 else:
                     log.error(f"❌ Invalid response format for {style_name} image {image_number}")
+                    time.sleep(1)  # Rate limiting
             elif response.status_code == 429:
                 log.warning(f"⚠️ Rate limited (attempt {attempt + 1}), waiting 60s...")
                 time.sleep(60)
+                time.sleep(1)  # Rate limiting
                 continue
             else:
                 log.error(f"❌ API error {response.status_code}: {response.text}")
+                time.sleep(1)  # Rate limiting
                 
         except Exception as e:
             log.error(f"❌ Image generation failed (attempt {attempt + 1}): {e}")
+            time.sleep(1)  # Rate limiting
             if attempt < 2:
                 time.sleep(5)
+                time.sleep(1)  # Rate limiting
                 continue
     
     log.error(f"❌ All attempts failed for {style_name} image {image_number}")
+    time.sleep(1)  # Rate limiting
     return None
 
 def generate_all_images(prompts, style_name):

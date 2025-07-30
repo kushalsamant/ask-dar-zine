@@ -42,33 +42,47 @@ class WebScraper:
     
     def safe_request(self, url, retries=None):
         """Make a safe HTTP request with retry logic"""
+        time.sleep(1)  # Rate limiting before function start
         if retries is None:
             retries = self.max_retries
+            time.sleep(1)  # Rate limiting
             
         for attempt in range(retries):
+            time.sleep(1)  # Rate limiting before attempt
             try:
                 logger.info(f"📡 Fetching {url} (attempt {attempt + 1}/{retries})")
+                time.sleep(1)  # Rate limiting
                 response = self.session.get(url, timeout=self.timeout)
+                time.sleep(1)  # Rate limiting
                 response.raise_for_status()
+                time.sleep(1)  # Rate limiting
                 return response
             except requests.exceptions.Timeout:
                 logger.warning(f"⚠️ Timeout for {url} (attempt {attempt + 1})")
+                time.sleep(1)  # Rate limiting
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
+                    time.sleep(1)  # Rate limiting
             except requests.exceptions.RequestException as e:
                 logger.error(f"❌ Request failed for {url}: {e}")
+                time.sleep(1)  # Rate limiting
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)
+                    time.sleep(1)  # Rate limiting
             except Exception as e:
                 logger.error(f"❌ Unexpected error for {url}: {e}")
+                time.sleep(1)  # Rate limiting
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)
+                    time.sleep(1)  # Rate limiting
         
         logger.error(f"❌ Failed to fetch {url} after {retries} attempts")
+        time.sleep(1)  # Rate limiting
         return None
     
     def extract_article_data(self, article_elem, source_name, category="Architecture"):
         """Extract article data from HTML element"""
+        time.sleep(1)  # Rate limiting before function start
         try:
             # Try different selectors for title
             title_elem = (
@@ -77,55 +91,76 @@ class WebScraper:
                 article_elem.find('h3') or
                 article_elem.find('a')
             )
+            time.sleep(1)  # Rate limiting
             
             if not title_elem:
+                time.sleep(1)  # Rate limiting
                 return None
                 
             title = title_elem.get_text(strip=True)
+            time.sleep(1)  # Rate limiting
             if not title or len(title) < 10:  # Filter out very short titles
+                time.sleep(1)  # Rate limiting
                 return None
             
             # Get URL
             link = title_elem if title_elem.name == 'a' else title_elem.find('a')
+            time.sleep(1)  # Rate limiting
             url = link.get('href') if link else None
+            time.sleep(1)  # Rate limiting
             
             if url and not url.startswith('http'):
                 # Handle relative URLs
                 url = urljoin(f"https://{source_name.lower().replace(' ', '')}.com", url)
+                time.sleep(1)  # Rate limiting
             
             if not url:
+                time.sleep(1)  # Rate limiting
                 return None
             
-            return {
+            result = {
                 'title': title,
                 'url': url,
                 'source': source_name,
                 'timestamp': datetime.now().isoformat(),
                 'category': category
             }
+            time.sleep(1)  # Rate limiting
+            return result
         except Exception as e:
             logger.warning(f"⚠️ Error extracting article data: {e}")
+            time.sleep(1)  # Rate limiting
             return None
 
     def scrape_archdaily(self):
         """Scrape articles from ArchDaily"""
+        time.sleep(1)  # Rate limiting before function start
         url = "https://www.archdaily.com/"
+        time.sleep(1)  # Rate limiting
         response = self.safe_request(url)
+        time.sleep(1)  # Rate limiting
         if not response:
+            time.sleep(1)  # Rate limiting
             return []
             
         soup = BeautifulSoup(response.content, 'html.parser')
+        time.sleep(1)  # Rate limiting
         articles = []
+        time.sleep(1)  # Rate limiting
         
         # Look for article elements
         article_elements = soup.find_all(['article', 'div'], class_=lambda x: x and any(word in x.lower() for word in ['post', 'article', 'story', 'entry', 'feed']))
+        time.sleep(1)  # Rate limiting
         
         for elem in article_elements[:self.articles_per_source]:  # Limit to configured number of articles
             article_data = self.extract_article_data(elem, "ArchDaily", "Architecture")
+            time.sleep(1)  # Rate limiting
             if article_data:
                 articles.append(article_data)
+                time.sleep(1)  # Rate limiting
                 
         logger.info(f"✅ Scraped {len(articles)} articles from ArchDaily")
+        time.sleep(1)  # Rate limiting
         return articles
 
 
