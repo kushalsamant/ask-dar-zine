@@ -357,8 +357,8 @@ def generate_all_captions(prompts):
     return captions
 
 # === 📄 PDF Generation ===
-def place_caption_with_background(c, caption, w, h):
-    """Place caption on the page with background for readability"""
+def place_caption_with_bands(c, caption, w, h, page_number):
+    """Place caption with white band and transparent band at bottom"""
     text = caption.split('\n')
     font_size = 14
     line_spacing = 18
@@ -368,29 +368,42 @@ def place_caption_with_background(c, caption, w, h):
     text_width = max(c.stringWidth(line, "Helvetica-Bold", font_size) for line in text)
     text_height = len(text) * line_spacing
     
-    # Position at top-right corner
-    start_x = w - 40 - text_width
-    start_y = h - 120
+    # Band dimensions
+    white_band_height = text_height + 20  # Text height + padding
+    transparent_band_height = white_band_height  # Same size as white band
+    band_margin_bottom = white_band_height  # Distance from bottom = band height
     
-    # Calculate background rectangle with 10% padding
-    padding_x = text_width * 0.10
-    padding_y = line_spacing * 0.10
+    # Calculate band positions
+    white_band_y = band_margin_bottom + transparent_band_height
+    transparent_band_y = band_margin_bottom
     
-    bg_x = start_x - padding_x
-    bg_y = start_y - text_height - padding_y
-    bg_width = text_width + (padding_x * 2)
-    bg_height = text_height + (padding_y * 2)
+    # Draw transparent band (bottom)
+    c.saveState()
+    c.setFillColorRGB(0, 0, 0, alpha=0.25)
+    c.rect(0, transparent_band_y, w, transparent_band_height, fill=1, stroke=0)
+    c.restoreState()
     
-    # Draw semi-transparent background
-    c.setFillColorRGB(0, 0, 0, alpha=0.7)
-    c.rect(bg_x, bg_y, bg_width, bg_height, fill=1)
+    # Draw white band (above transparent band)
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1, alpha=1.0)
+    c.rect(0, white_band_y, w, white_band_height, fill=1, stroke=0)
+    c.restoreState()
     
-    # Draw text
+    # Draw caption (left) and page number (right) in white band
+    c.saveState()
     c.setFont("Helvetica-Bold", font_size)
-    c.setFillColorRGB(1, 1, 1)  # White text
+    c.setFillColorRGB(0, 0, 0)
     
+    # Draw caption lines
     for i, line in enumerate(text):
-        c.drawRightString(w - 40, start_y - i * line_spacing, line)
+        y = white_band_y + white_band_height - 10 - i * line_spacing - font_size
+        c.drawString(20, y, line)
+    
+    # Draw page number (right-aligned)
+    page_str = f"{page_number}"
+    c.setFont("Helvetica-Bold", font_size)
+    c.drawRightString(w - 20, white_band_y + white_band_height - 10 - font_size, page_str)
+    c.restoreState()
 
 def create_daily_pdf(images, captions, style_name, theme):
     """Create the daily PDF with all images and captions"""
@@ -439,13 +452,8 @@ def create_daily_pdf(images, captions, style_name, theme):
             # Add image to PDF (full bleed)
             c.drawImage(image_path, -20, -20, width=w+40, height=h+40)
             
-            # Add caption with background
-            place_caption_with_background(c, caption, w, h)
-            
-            # Add image number
-            c.setFont("Helvetica-Bold", 16)
-            c.setFillColorRGB(1, 1, 1)  # White text
-            c.drawString(40, h - 40, f"#{i+1:02d}")
+            # Add caption with bands and page number
+            place_caption_with_bands(c, caption, w, h, page_count + 1)
             
             c.showPage()
             page_count += 1
