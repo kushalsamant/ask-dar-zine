@@ -215,7 +215,7 @@ The repository includes automated daily generation via GitHub Actions:
 name: Daily Zine Generation
 on:
   schedule:
-    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+    - cron: '30 0 * * *'  # Daily at 6:00 AM IST (12:30 AM UTC)
 ```
 
 ### **Manual Execution**
