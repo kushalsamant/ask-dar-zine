@@ -38,7 +38,7 @@ logging.basicConfig(
 log = logging.getLogger()
 
 # === 🛠️ Auto-install missing dependencies ===
-REQUIRED_LIBS = ['python-dotenv', 'reportlab', 'Pillow', 'beautifulsoup4']
+REQUIRED_LIBS = ['python-dotenv', 'reportlab', 'Pillow', 'beautifulsoup4', 'tqdm']
 
 def install_missing_libs():
     missing_libs = []
@@ -50,6 +50,8 @@ def install_missing_libs():
                 __import__('PIL')
             elif lib == 'beautifulsoup4':
                 __import__('bs4')
+            elif lib == 'tqdm':
+                __import__('tqdm')
             else:
                 __import__(lib)
         except ImportError:
@@ -75,6 +77,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from PIL import Image
+from tqdm import tqdm
 
 # === 📥 Load environment variables ===
 load_dotenv('ask.env')
@@ -348,22 +351,29 @@ def generate_all_images(prompts, style_name):
     log.info(f"🎨 Starting sequential generation of {len(prompts)} images for {style_name} style")
     
     images = []
-    for i, prompt in enumerate(prompts):
-        log.info(f"🔄 Processing image {i+1}/{len(prompts)}")
-        try:
-            image_path = generate_single_image(prompt, style_name, i+1)
-            if image_path:
-                images.append(image_path)
-                log.info(f"✅ Image {i+1}/{len(prompts)} completed successfully")
-            else:
-                log.error(f"❌ Image {i+1} failed to generate")
-        except Exception as e:
-            log.error(f"❌ Image {i+1} failed with error: {e}")
+    with tqdm(total=len(prompts), desc=f"🖼️ Generating {style_name} images", unit="image", 
+              bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pbar:
         
-        # Rate limiting between images
-        if i < len(prompts) - 1:  # Don't sleep after the last image
-            log.info(f"⏳ Waiting 1 second before next image...")
-            time.sleep(1)
+        for i, prompt in enumerate(prompts):
+            pbar.set_description(f"🖼️ Generating {style_name} image {i+1}/{len(prompts)}")
+            try:
+                image_path = generate_single_image(prompt, style_name, i+1)
+                if image_path:
+                    images.append(image_path)
+                    pbar.set_postfix_str(f"✅ Success")
+                else:
+                    pbar.set_postfix_str(f"❌ Failed")
+                    log.error(f"❌ Image {i+1} failed to generate")
+            except Exception as e:
+                pbar.set_postfix_str(f"❌ Error")
+                log.error(f"❌ Image {i+1} failed with error: {e}")
+            
+            pbar.update(1)
+            
+            # Rate limiting between images
+            if i < len(prompts) - 1:  # Don't sleep after the last image
+                pbar.set_description(f"⏳ Waiting before next image...")
+                time.sleep(1)
     
     log.info(f"🎉 Sequential image generation complete: {len(images)}/{len(prompts)} images generated")
     return images
@@ -374,16 +384,21 @@ def generate_all_captions(prompts):
     log.info(f"📝 Starting sequential caption generation for {len(prompts)} prompts")
     
     captions = []
-    for i, prompt in enumerate(prompts):
-        log.info(f"🔄 Processing caption {i+1}/{len(prompts)}")
-        caption = generate_caption(prompt)
-        captions.append(caption)
-        log.info(f"✅ Caption {i+1}/{len(prompts)} generated successfully")
+    with tqdm(total=len(prompts), desc=f"📝 Generating captions", unit="caption", 
+              bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pbar:
         
-        # Rate limiting between captions
-        if i < len(prompts) - 1:  # Don't sleep after the last caption
-            log.info(f"⏳ Waiting 1 second before next caption...")
-            time.sleep(1)
+        for i, prompt in enumerate(prompts):
+            pbar.set_description(f"📝 Generating caption {i+1}/{len(prompts)}")
+            caption = generate_caption(prompt)
+            captions.append(caption)
+            pbar.set_postfix_str(f"✅ Success")
+            
+            pbar.update(1)
+            
+            # Rate limiting between captions
+            if i < len(prompts) - 1:  # Don't sleep after the last caption
+                pbar.set_description(f"⏳ Waiting before next caption...")
+                time.sleep(1)
     
     log.info(f"🎉 Sequential caption generation complete: {len(captions)}/{len(prompts)} captions generated")
     return captions
@@ -481,23 +496,27 @@ def create_daily_pdf(images, captions, style_name, theme):
     page_count += 1
     
     # Add images with captions
-    for i, (image_path, caption) in enumerate(zip(images, captions)):
-        try:
-            # Add image to PDF (full bleed)
-            c.drawImage(image_path, -20, -20, width=w+40, height=h+40)
+    with tqdm(total=len(images), desc=f"📄 Creating PDF pages", unit="page", 
+              bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pbar:
+        
+        for i, (image_path, caption) in enumerate(zip(images, captions)):
+            pbar.set_description(f"📄 Adding page {i+1}/{len(images)}")
+            try:
+                # Add image to PDF (full bleed)
+                c.drawImage(image_path, -20, -20, width=w+40, height=h+40)
+                
+                # Add caption with white band and page number
+                place_caption_with_white_band(c, caption, w, h, i + 1)
+                
+                c.showPage()
+                page_count += 1
+                pbar.set_postfix_str(f"✅ Success")
+                
+            except Exception as e:
+                pbar.set_postfix_str(f"❌ Error")
+                log.error(f"❌ Error adding image {i+1}: {e}")
             
-            # Add caption with white band and page number
-            place_caption_with_white_band(c, caption, w, h, i + 1)
-            
-            c.showPage()
-            page_count += 1
-            
-            if (i + 1) % 10 == 0:
-                log.info(f"✅ Added {i+1}/{len(images)} images to PDF")
-            
-        except Exception as e:
-            log.error(f"❌ Error adding image {i+1}: {e}")
-            continue
+            pbar.update(1)
     
     # Add back cover page
     c.setFont("Helvetica-BoldOblique", 24)
@@ -535,70 +554,92 @@ def main():
     log.info("🚀 Starting Daily Zine Generator - Linear Pipeline")
     log.info("📋 Pipeline: Web Scraping → Style Selection → Prompt Generation → Image Generation → Caption Generation → PDF Creation")
     
-    # Step 1: Scrape web for architectural content
-    log.info("=" * 60)
-    log.info("📡 STEP 1/6: Scraping web for architectural content")
-    log.info("=" * 60)
-    theme = scrape_architectural_content()
-    log.info(f"🎯 Theme selected: {theme}")
-    time.sleep(2)  # Rate limiting between major steps
-    
-    # Step 2: Select daily style
-    log.info("=" * 60)
-    log.info("🎨 STEP 2/6: Selecting daily style")
-    log.info("=" * 60)
-    style_name = get_daily_style()
-    log.info(f"🎯 Selected style: {style_name.upper()}")
-    time.sleep(2)  # Rate limiting between major steps
-    
-    # Step 3: Generate 50 prompts
-    log.info("=" * 60)
-    log.info("✍️ STEP 3/6: Generating 50 prompts")
-    log.info("=" * 60)
-    prompts = generate_prompts(theme, 50)
-    if not prompts:
-        log.error("❌ Failed to generate prompts")
-        return
-    log.info(f"✅ Generated {len(prompts)} prompts")
-    time.sleep(2)  # Rate limiting between major steps
-    
-    # Step 4: Generate 50 images in one style (sequential)
-    log.info("=" * 60)
-    log.info("🖼️ STEP 4/6: Generating 50 images sequentially")
-    log.info("=" * 60)
-    images = generate_all_images(prompts, style_name)
-    if not images:
-        log.error("❌ Failed to generate images")
-        return
-    log.info(f"✅ Generated {len(images)} images")
-    time.sleep(2)  # Rate limiting between major steps
-    
-    # Step 5: Generate captions (sequential)
-    log.info("=" * 60)
-    log.info("📝 STEP 5/6: Generating captions sequentially")
-    log.info("=" * 60)
-    captions = generate_all_captions(prompts)
-    log.info(f"✅ Generated {len(captions)} captions")
-    time.sleep(2)  # Rate limiting between major steps
-    
-    # Step 6: Create PDF
-    log.info("=" * 60)
-    log.info("📄 STEP 6/6: Creating PDF")
-    log.info("=" * 60)
-    pdf_path = create_daily_pdf(images, captions, style_name, theme)
-    
-    if pdf_path:
+    # Overall pipeline progress bar
+    with tqdm(total=6, desc=f"🚀 Overall Pipeline Progress", unit="step", 
+              bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pipeline_pbar:
+        
+        # Step 1: Scrape web for architectural content
         log.info("=" * 60)
-        log.info("🎉 LINEAR PIPELINE COMPLETED SUCCESSFULLY!")
+        log.info("📡 STEP 1/6: Scraping web for architectural content")
         log.info("=" * 60)
-        log.info(f"📁 PDF: {pdf_path}")
-        log.info(f"🎨 Style: {style_name.upper()}")
-        log.info(f"📊 Images: {len(images)}")
-        log.info(f"📝 Captions: {len(captions)}")
-        log.info(f"🎯 Theme: {theme}")
-        log.info("✅ All steps completed in strict sequential order!")
-    else:
-        log.error("❌ Failed to create daily PDF")
+        pipeline_pbar.set_description(f"📡 Step 1/6: Web Scraping")
+        theme = scrape_architectural_content()
+        log.info(f"🎯 Theme selected: {theme}")
+        pipeline_pbar.set_postfix_str(f"✅ Theme: {theme[:30]}...")
+        pipeline_pbar.update(1)
+        time.sleep(2)  # Rate limiting between major steps
+        
+        # Step 2: Select daily style
+        log.info("=" * 60)
+        log.info("🎨 STEP 2/6: Selecting daily style")
+        log.info("=" * 60)
+        pipeline_pbar.set_description(f"🎨 Step 2/6: Style Selection")
+        style_name = get_daily_style()
+        log.info(f"🎯 Selected style: {style_name.upper()}")
+        pipeline_pbar.set_postfix_str(f"✅ Style: {style_name.upper()}")
+        pipeline_pbar.update(1)
+        time.sleep(2)  # Rate limiting between major steps
+        
+        # Step 3: Generate 50 prompts
+        log.info("=" * 60)
+        log.info("✍️ STEP 3/6: Generating 50 prompts")
+        log.info("=" * 60)
+        pipeline_pbar.set_description(f"✍️ Step 3/6: Prompt Generation")
+        prompts = generate_prompts(theme, 50)
+        if not prompts:
+            log.error("❌ Failed to generate prompts")
+            return
+        log.info(f"✅ Generated {len(prompts)} prompts")
+        pipeline_pbar.set_postfix_str(f"✅ {len(prompts)} prompts")
+        pipeline_pbar.update(1)
+        time.sleep(2)  # Rate limiting between major steps
+        
+        # Step 4: Generate 50 images in one style (sequential)
+        log.info("=" * 60)
+        log.info("🖼️ STEP 4/6: Generating 50 images sequentially")
+        log.info("=" * 60)
+        pipeline_pbar.set_description(f"🖼️ Step 4/6: Image Generation")
+        images = generate_all_images(prompts, style_name)
+        if not images:
+            log.error("❌ Failed to generate images")
+            return
+        log.info(f"✅ Generated {len(images)} images")
+        pipeline_pbar.set_postfix_str(f"✅ {len(images)} images")
+        pipeline_pbar.update(1)
+        time.sleep(2)  # Rate limiting between major steps
+        
+        # Step 5: Generate captions (sequential)
+        log.info("=" * 60)
+        log.info("📝 STEP 5/6: Generating captions sequentially")
+        log.info("=" * 60)
+        pipeline_pbar.set_description(f"📝 Step 5/6: Caption Generation")
+        captions = generate_all_captions(prompts)
+        log.info(f"✅ Generated {len(captions)} captions")
+        pipeline_pbar.set_postfix_str(f"✅ {len(captions)} captions")
+        pipeline_pbar.update(1)
+        time.sleep(2)  # Rate limiting between major steps
+        
+        # Step 6: Create PDF
+        log.info("=" * 60)
+        log.info("📄 STEP 6/6: Creating PDF")
+        log.info("=" * 60)
+        pipeline_pbar.set_description(f"📄 Step 6/6: PDF Creation")
+        pdf_path = create_daily_pdf(images, captions, style_name, theme)
+        pipeline_pbar.set_postfix_str(f"✅ PDF created")
+        pipeline_pbar.update(1)
+        
+        if pdf_path:
+            log.info("=" * 60)
+            log.info("🎉 LINEAR PIPELINE COMPLETED SUCCESSFULLY!")
+            log.info("=" * 60)
+            log.info(f"📁 PDF: {pdf_path}")
+            log.info(f"🎨 Style: {style_name.upper()}")
+            log.info(f"📊 Images: {len(images)}")
+            log.info(f"📝 Captions: {len(captions)}")
+            log.info(f"🎯 Theme: {theme}")
+            log.info("✅ All steps completed in strict sequential order!")
+        else:
+            log.error("❌ Failed to create daily PDF")
 
 if __name__ == "__main__":
     main() 

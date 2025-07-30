@@ -7,6 +7,7 @@ import time
 import random
 from dotenv import load_dotenv
 import logging
+from tqdm import tqdm
 
 from urllib.parse import urljoin, urlparse
 
@@ -229,16 +230,22 @@ class WebScraper:
         
         all_articles = []
         
-        # Scrape sources sequentially
-        for source_name, source_func in sources:
-            try:
-                logger.info(f"📡 Scraping {source_name}...")
-                articles = source_func()
-                all_articles.extend(articles)
-                logger.info(f"✅ Scraped {len(articles)} articles from {source_name}")
-                time.sleep(2)  # Rate limiting between sources
-            except Exception as e:
-                logger.error(f"❌ Error scraping {source_name}: {e}")
+        # Scrape sources sequentially with progress bar
+        with tqdm(total=len(sources), desc=f"📡 Scraping sources", unit="source", 
+                  bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as pbar:
+            
+            for source_name, source_func in sources:
+                pbar.set_description(f"📡 Scraping {source_name}")
+                try:
+                    articles = source_func()
+                    all_articles.extend(articles)
+                    pbar.set_postfix_str(f"✅ {len(articles)} articles")
+                    time.sleep(2)  # Rate limiting between sources
+                except Exception as e:
+                    pbar.set_postfix_str(f"❌ Error")
+                    logger.error(f"❌ Error scraping {source_name}: {e}")
+                
+                pbar.update(1)
         
         # Remove duplicates based on title
         seen_titles = set()
