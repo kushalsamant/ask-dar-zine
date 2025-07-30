@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 # === 🛠️ Auto-install missing dependencies ===
 REQUIRED_LIBS = [
-    'python-dotenv', 'replicate', 'reportlab',
+    'python-dotenv', 'reportlab',
     'feedparser', 'requests', 'Pillow', 'beautifulsoup4'
 ]
 
@@ -62,7 +62,6 @@ install_missing_libs()
 
 # === Now import everything ===
 try:
-    import replicate
     import requests
     import feedparser
     from dotenv import load_dotenv
@@ -72,6 +71,7 @@ try:
     from PIL import Image
     from io import BytesIO
     import random
+    import base64
     log.info("✅ All imports successful")
 except ImportError as e:
     log.error(f"❌ Import error: {e}")
@@ -126,42 +126,42 @@ class RateLimiter:
 # === 🎨 Style Models Configuration ===
 STYLE_MODELS = {
     'futuristic': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', futuristic sci-fi style, neon colors, advanced technology, cyberpunk aesthetic',
         'negative_prompt': 'cartoon, anime, sketch, watercolor, traditional art, vintage'
     },
     'minimalist': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', minimalist design, clean lines, simple composition, modern aesthetic',
         'negative_prompt': 'complex, cluttered, detailed, ornate, busy'
     },
     'sketch': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', pencil sketch style, hand-drawn, artistic line work, monochrome',
         'negative_prompt': 'colorful, digital art, 3d render, photorealistic'
     },
     'abstract': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', abstract art style, geometric shapes, vibrant colors, modern art',
         'negative_prompt': 'realistic, photorealistic, traditional, representational'
     },
     'technical': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', technical drawing style, blueprint aesthetic, engineering diagrams, precise lines',
         'negative_prompt': 'artistic, abstract, colorful, organic shapes'
     },
     'watercolor': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', watercolor painting style, soft edges, flowing colors, artistic',
         'negative_prompt': 'digital art, sharp edges, geometric, technical'
     },
     'anime': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', anime style, Japanese animation, vibrant colors, stylized characters',
         'negative_prompt': 'realistic, photorealistic, western animation, 3d'
     },
     'photorealistic': {
-        'model': 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+        'model': 'stabilityai/stable-diffusion-xl-base-1.0',
         'prompt_suffix': ', photorealistic style, high detail, realistic lighting, professional photography',
         'negative_prompt': 'cartoon, anime, abstract, artistic, stylized'
     }
@@ -170,13 +170,15 @@ STYLE_MODELS = {
 # === 🔧 Performance and Configuration Settings ===
 TEXT_PROVIDER = get_env("TEXT_PROVIDER", "groq")
 TEXT_MODEL = get_env("TEXT_MODEL", required=True)
-IMAGE_WIDTH = int(get_env("IMAGE_WIDTH", "2048"))
+IMAGE_PROVIDER = get_env("IMAGE_PROVIDER", "together")
+IMAGE_MODEL = get_env("IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
+IMAGE_WIDTH = int(get_env("IMAGE_WIDTH", "1024"))
 IMAGE_HEIGHT = int(get_env("IMAGE_HEIGHT", "1024"))
 IMAGE_DPI = int(get_env("IMAGE_DPI", "300"))
 CAPTION_FONT_SIZE = int(get_env("CAPTION_FONT_SIZE", "14"))
 CAPTION_LINE_SPACING = int(get_env("CAPTION_LINE_SPACING", "18"))
 CAPTION_POSITION = get_env("CAPTION_POSITION", "top-right")
-NUM_STEPS = int(get_env("NUM_INFERENCE_STEPS", "30"))
+NUM_STEPS = int(get_env("INFERENCE_STEPS", "30"))
 GUIDANCE_SCALE = float(get_env("GUIDANCE_SCALE", "7.5"))
 FILTER_KEYWORDS = [kw.strip() for kw in get_env("FILTER_KEYWORDS", "").split(",") if kw.strip()]
 
@@ -649,74 +651,129 @@ Generate the caption:"""
 # === 🎨 STEP 3: Generate images with different styles ===
 # === 🎨 Image Generation ===
 def generate_single_image(args):
-    """Generate a single image with retry logic and memory optimization (TEST MODE - SKIPS REPLICATE)"""
+    """Generate a single image using Together.ai API with retry logic"""
     prompt, style_name, i, style_config = args
     
-    log.info(f"🧪 TEST MODE: Simulating {style_name} image {i+1} generation")
+    log.info(f"🎨 Generating {style_name} image {i+1} with Together.ai")
     
     # Create directory structure
     style_dir = os.path.join("images", style_name)
     os.makedirs(style_dir, exist_ok=True)
     
-    # Simulate image generation (skip Replicate API call)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
-    image_path = os.path.join(style_dir, image_filename)
+    # Prepare the full prompt with style suffix
+    full_prompt = f"{prompt}{style_config['prompt_suffix']}"
+    negative_prompt = style_config['negative_prompt']
     
-    # Create a dummy image file for testing
-    try:
-        # Create a simple test image using PIL
-        from PIL import Image, ImageDraw, ImageFont
-        import random
-        
-        # Create a test image with the style name and prompt
-        img = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
-        draw = ImageDraw.Draw(img)
-        
-        # Add text to the image
+    # Together.ai API endpoint for image generation
+    together_api_url = "https://api.together.xyz/v1/images/generations"
+    
+    # Prepare the request payload
+    payload = {
+        "model": IMAGE_MODEL,
+        "prompt": full_prompt,
+        "negative_prompt": negative_prompt,
+        "width": IMAGE_WIDTH,
+        "height": IMAGE_HEIGHT,
+        "steps": NUM_STEPS,
+        "guidance_scale": GUIDANCE_SCALE,
+        "seed": random.randint(1, 1000000)  # Random seed for variety
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {API_KEYS['together']}",
+        "Content-Type": "application/json"
+    }
+    
+    # Rate limiting
+    rate_limiter.wait_if_needed()
+    
+    # Retry logic for image generation
+    for attempt in range(MAX_RETRIES):
         try:
-            # Try to use a default font
-            font = ImageFont.load_default()
-        except:
-            font = None
-        
-        # Add style name and prompt info
-        text_lines = [
-            f"TEST IMAGE - {style_name.upper()}",
-            f"Prompt: {prompt[:50]}...",
-            f"Generated: {timestamp}",
-            "REPLICATE SKIPPED FOR TESTING"
-        ]
-        
-        y_position = 50
-        for line in text_lines:
-            if font:
-                draw.text((50, y_position), line, fill=(255, 255, 255), font=font)
+            log.info(f"🔄 Attempt {attempt + 1}/{MAX_RETRIES} for {style_name} image {i+1}")
+            
+            response = requests.post(
+                together_api_url,
+                headers=headers,
+                json=payload,
+                timeout=120  # 2 minute timeout for image generation
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Extract image data from response
+                if 'data' in data and len(data['data']) > 0:
+                    image_data = data['data'][0]
+                    
+                    # Handle base64 image data
+                    if 'b64_json' in image_data:
+                        image_b64 = image_data['b64_json']
+                        image_bytes = base64.b64decode(image_b64)
+                        
+                        # Save image to file
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        image_filename = f"{style_name}_image_{i+1:02d}_{timestamp}.jpg"
+                        image_path = os.path.join(style_dir, image_filename)
+                        
+                        with open(image_path, 'wb') as f:
+                            f.write(image_bytes)
+                        
+                        # Log image details
+                        image_log_file = os.path.join(style_dir, f"{style_name}_image_log.txt")
+                        with open(image_log_file, 'a', encoding='utf-8') as log_file:
+                            log_file.write(f"Image {i+1}: {image_filename}\n")
+                            log_file.write(f"Prompt: {prompt}\n")
+                            log_file.write(f"Full Prompt: {full_prompt}\n")
+                            log_file.write(f"Negative Prompt: {negative_prompt}\n")
+                            log_file.write(f"Model: {IMAGE_MODEL}\n")
+                            log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                            log_file.write(f"File Size: {os.path.getsize(image_path)} bytes\n")
+                            log_file.write(f"Status: SUCCESS\n")
+                            log_file.write("-" * 80 + "\n")
+                        
+                        log.info(f"✅ Generated {style_name} image {i+1}: {image_filename} ({os.path.getsize(image_path)} bytes)")
+                        return f"together_ai_{image_filename}", image_path
+                    
+                    else:
+                        log.error(f"❌ No image data in response for {style_name} image {i+1}")
+                        if attempt < MAX_RETRIES - 1:
+                            time.sleep(5)
+                            continue
+                
+                else:
+                    log.error(f"❌ Invalid response format for {style_name} image {i+1}: {data}")
+                    if attempt < MAX_RETRIES - 1:
+                        time.sleep(5)
+                        continue
+            
+            elif response.status_code == 429:
+                log.warning(f"⚠️ Rate limited (attempt {attempt + 1}), waiting 60s...")
+                time.sleep(60)
+                continue
+            elif response.status_code == 500:
+                log.warning(f"⚠️ Server error (attempt {attempt + 1}), retrying...")
+                time.sleep(5)
+                continue
             else:
-                draw.text((50, y_position), line, fill=(255, 255, 255))
-            y_position += 30
-        
-        # Save the test image
-        img.save(image_path, 'JPEG', quality=85)
-        
-        # Log image details
-        image_log_file = os.path.join(style_dir, f"{style_name}_image_log.txt")
-        with open(image_log_file, 'a', encoding='utf-8') as log_file:
-            log_file.write(f"Image {i+1}: {image_filename}\n")
-            log_file.write(f"Prompt: {prompt}\n")
-            log_file.write(f"Full Prompt: {prompt}, {style_config['prompt_suffix']}\n")
-            log_file.write(f"URL: TEST_MODE_NO_URL\n")
-            log_file.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            log_file.write(f"File Size: {os.path.getsize(image_path)} bytes\n")
-            log_file.write(f"Status: TEST_MODE_SIMULATED\n")
-            log_file.write("-" * 80 + "\n")
-        
-        log.info(f"✅ TEST MODE: Generated {style_name} image {i+1}: {image_filename} ({os.path.getsize(image_path)} bytes)")
-        return f"test_url_{image_filename}", image_path
-        
-    except Exception as e:
-        log.error(f"❌ TEST MODE: Failed to create test image: {e}")
-        return None, None
+                log.error(f"❌ API error {response.status_code}: {response.text}")
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(5)
+                    continue
+                    
+        except requests.exceptions.Timeout:
+            log.warning(f"⚠️ Timeout (attempt {attempt + 1})")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(5)
+                continue
+        except Exception as e:
+            log.error(f"❌ Image generation failed (attempt {attempt + 1}): {e}")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(5)
+                continue
+    
+    log.error(f"❌ All attempts failed for {style_name} image {i+1}")
+    return None, None
 
 def generate_images_with_style(prompts, style_name):
     """Generate images for a specific style with parallel processing"""
