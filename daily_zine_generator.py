@@ -778,6 +778,149 @@ def display_architectural_sources():
     
     return existing_feeds
 
+def add_manual_source(name, url, category):
+    """Add a single source manually"""
+    log.info(f"🔧 Adding manual source: {name}")
+    
+    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
+    existing_feeds = []
+    
+    try:
+        if os.path.exists(existing_feeds_file):
+            with open(existing_feeds_file, 'r') as f:
+                existing_feeds = json.load(f)
+    except Exception as e:
+        log.warning(f"⚠️ Could not load existing feeds: {e}")
+    
+    # Check if source already exists
+    for feed in existing_feeds:
+        if feed.get('name') == name:
+            log.warning(f"⚠️ Source '{name}' already exists")
+            return False
+    
+    # Add new source
+    new_source = {
+        "name": name,
+        "url": url,
+        "category": category,
+        "added_at": datetime.now().isoformat()
+    }
+    
+    existing_feeds.append(new_source)
+    
+    try:
+        with open(existing_feeds_file, 'w') as f:
+            json.dump(existing_feeds, f, indent=2)
+        log.info(f"✅ Added source: {name} ({category})")
+        return True
+    except Exception as e:
+        log.error(f"❌ Error saving source: {e}")
+        return False
+
+def remove_manual_source(name):
+    """Remove a source by name"""
+    log.info(f"🔧 Removing source: {name}")
+    
+    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
+    existing_feeds = []
+    
+    try:
+        if os.path.exists(existing_feeds_file):
+            with open(existing_feeds_file, 'r') as f:
+                existing_feeds = json.load(f)
+    except Exception as e:
+        log.warning(f"⚠️ Could not load existing feeds: {e}")
+        return False
+    
+    # Find and remove source
+    for i, feed in enumerate(existing_feeds):
+        if feed.get('name') == name:
+            removed = existing_feeds.pop(i)
+            try:
+                with open(existing_feeds_file, 'w') as f:
+                    json.dump(existing_feeds, f, indent=2)
+                log.info(f"✅ Removed source: {name}")
+                return True
+            except Exception as e:
+                log.error(f"❌ Error saving feeds: {e}")
+                return False
+    
+    log.warning(f"❌ Source '{name}' not found")
+    return False
+
+def add_batch_manual_sources():
+    """Add a batch of predefined sources"""
+    log.info("🔧 Adding batch of predefined sources...")
+    
+    batch_sources = [
+        {"name": "AA School of Architecture", "url": "https://www.aaschool.ac.uk/feed", "category": "Academic"},
+        {"name": "Berlage Institute", "url": "https://theberlage.nl/feed", "category": "Academic"},
+        {"name": "ETH Zurich Architecture", "url": "https://arch.ethz.ch/feed", "category": "Academic"},
+        {"name": "TU Delft Architecture", "url": "https://www.tudelft.nl/en/architecture-and-the-built-environment/feed", "category": "Academic"},
+        {"name": "UCL Bartlett", "url": "https://www.ucl.ac.uk/bartlett/feed", "category": "Academic"},
+        {"name": "Cornell Architecture", "url": "https://aap.cornell.edu/feed", "category": "Academic"},
+        {"name": "Princeton Architecture", "url": "https://soa.princeton.edu/feed", "category": "Academic"},
+        {"name": "UC Berkeley Architecture", "url": "https://ced.berkeley.edu/architecture/feed", "category": "Academic"},
+        {"name": "Architectural Review Asia Pacific", "url": "https://www.architectural-review.com/feed", "category": "International"},
+        {"name": "Architecture Australia", "url": "https://architectureau.com/feed", "category": "International"},
+        {"name": "Canadian Architect", "url": "https://www.canadianarchitect.com/feed", "category": "International"},
+        {"name": "Architectural Digest India", "url": "https://www.architecturaldigest.in/feed", "category": "International"},
+        {"name": "Architectural Digest Middle East", "url": "https://www.architecturaldigestme.com/feed", "category": "International"},
+        {"name": "Architectural Digest China", "url": "https://www.architecturaldigest.cn/feed", "category": "International"},
+        {"name": "Architectural Science Review", "url": "https://www.tandfonline.com/feed/rss/rjar20", "category": "Research"},
+        {"name": "Journal of Architectural Education", "url": "https://www.tandfonline.com/feed/rss/rjae20", "category": "Research"},
+        {"name": "Architecture Research Quarterly", "url": "https://www.cambridge.org/core/journals/architecture-research-quarterly/feed", "category": "Research"},
+        {"name": "International Journal of Architectural Computing", "url": "https://journals.sagepub.com/feed/ijac", "category": "Research"},
+        {"name": "Archinect", "url": "https://archinect.com/feed", "category": "Innovation"},
+        {"name": "Architecture Lab", "url": "https://www.architecturelab.net/feed", "category": "Innovation"},
+        {"name": "Architecture Now", "url": "https://architecturenow.co.nz/feed", "category": "Innovation"},
+        {"name": "Architecture & Design", "url": "https://www.architectureanddesign.com.au/feed", "category": "Innovation"},
+        {"name": "Architect Magazine", "url": "https://www.architectmagazine.com/rss", "category": "Regional"},
+        {"name": "Architecture Week", "url": "https://www.architectureweek.com/feed", "category": "Regional"},
+        {"name": "Architecture Foundation", "url": "https://architecturefoundation.org.uk/feed", "category": "Emerging"},
+        {"name": "Architectural League", "url": "https://archleague.org/feed", "category": "Emerging"},
+        {"name": "Storefront for Art and Architecture", "url": "https://storefrontnews.org/feed", "category": "Emerging"},
+        {"name": "Architecture for Humanity", "url": "https://architectureforhumanity.org/feed", "category": "Emerging"},
+        {"name": "Digital Architecture", "url": "https://digitalarchitecture.org/feed", "category": "Digital"},
+        {"name": "Computational Architecture", "url": "https://computationalarchitecture.net/feed", "category": "Digital"},
+        {"name": "Parametric Architecture", "url": "https://parametric-architecture.com/feed", "category": "Digital"},
+        {"name": "Architecture and Computation", "url": "https://architectureandcomputation.com/feed", "category": "Digital"}
+    ]
+    
+    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
+    existing_feeds = []
+    
+    try:
+        if os.path.exists(existing_feeds_file):
+            with open(existing_feeds_file, 'r') as f:
+                existing_feeds = json.load(f)
+    except Exception as e:
+        log.warning(f"⚠️ Could not load existing feeds: {e}")
+    
+    added_count = 0
+    
+    for source in batch_sources:
+        # Check if already exists
+        exists = any(feed.get('name') == source['name'] for feed in existing_feeds)
+        
+        if not exists:
+            source['added_at'] = datetime.now().isoformat()
+            existing_feeds.append(source)
+            added_count += 1
+            log.info(f"✅ Added: {source['name']} ({source['category']})")
+        else:
+            log.info(f"⚠️ Skipped: {source['name']} (already exists)")
+    
+    try:
+        with open(existing_feeds_file, 'w') as f:
+            json.dump(existing_feeds, f, indent=2)
+        log.info(f"\n🎉 Successfully added {added_count} new sources!")
+        log.info(f"📊 Total sources: {len(existing_feeds)}")
+        return added_count
+    except Exception as e:
+        log.error(f"❌ Error saving sources: {e}")
+        return 0
+
 # === 🤖 LLM Integration ===
 def call_llm(prompt, system_prompt=None):
     """Call LLM API with caching, enhanced token limits for sophisticated prompts"""
@@ -1422,6 +1565,9 @@ def main():
     parser.add_argument('--style', type=str, help='Force specific style (e.g., technical, abstract)')
     parser.add_argument('--theme', type=str, help='Force specific theme instead of web scraping')
     parser.add_argument('--sources', action='store_true', help='Display current architectural sources')
+    parser.add_argument('--add-source', nargs=3, metavar=('NAME', 'URL', 'CATEGORY'), help='Add a single source manually')
+    parser.add_argument('--remove-source', type=str, help='Remove a source by name')
+    parser.add_argument('--batch-sources', action='store_true', help='Add batch of predefined sources')
     parser.add_argument('--fast', action='store_true', help='Enable fast mode (Free Tier Optimized)')
     parser.add_argument('--ultra', action='store_true', help='Enable ultra mode (Conservative Free Tier Optimization)')
     
@@ -1448,10 +1594,26 @@ def main():
         MAX_CONCURRENT_IMAGES = int(get_env('ULTRA_MODE_CONCURRENT_IMAGES', '10'))
         MAX_CONCURRENT_CAPTIONS = int(get_env('ULTRA_MODE_CONCURRENT_CAPTIONS', '10'))
     
-    # Handle sources display
+    # Handle sources management
     if args.sources:
         log.info("📊 Displaying architectural sources...")
         display_architectural_sources()
+        return
+    
+    # Handle manual source addition
+    if args.add_source:
+        name, url, category = args.add_source
+        add_manual_source(name, url, category)
+        return
+    
+    # Handle source removal
+    if args.remove_source:
+        remove_manual_source(args.remove_source)
+        return
+    
+    # Handle batch source addition
+    if args.batch_sources:
+        add_batch_manual_sources()
         return
     
     log.info("🚀 Starting Daily Zine Generator - Free Tier Optimized")
