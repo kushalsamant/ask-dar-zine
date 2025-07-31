@@ -253,6 +253,149 @@ class WebScraper:
         logger.info(f"✅ Scraped {len(articles)} articles from Architectural Record")
         return articles
 
+    def scrape_mit_media_lab(self):
+        """Scrape articles from MIT Media Lab"""
+        all_articles = []
+        
+        # Try RSS feed first (more reliable)
+        rss_url = "https://www.media.mit.edu/feed.rss"
+        response = self.safe_request(rss_url)
+        
+        if response:
+            try:
+                soup = BeautifulSoup(response.content, 'xml')
+                articles = []
+                
+                # Parse RSS items
+                items = soup.find_all('item')
+                for item in items[:self.articles_per_source]:
+                    title_elem = item.find('title')
+                    link_elem = item.find('link')
+                    description_elem = item.find('description')
+                    
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                        link = link_elem.get_text(strip=True) if link_elem else ""
+                        description = description_elem.get_text(strip=True) if description_elem else ""
+                        
+                        if len(title) > 10:  # Filter out very short titles
+                            article_data = {
+                                'title': title,
+                                'url': link,
+                                'description': description,
+                                'source': 'MIT Media Lab',
+                                'category': 'Technology & Architecture',
+                                'scraped_at': datetime.now().isoformat()
+                            }
+                            articles.append(article_data)
+                
+                if articles:
+                    logger.info(f"✅ Scraped {len(articles)} articles from MIT Media Lab RSS")
+                    all_articles.extend(articles)
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ RSS parsing failed for MIT Media Lab: {e}")
+        
+        # Scrape additional MIT Media Lab sections
+        mit_sections = [
+            ("https://www.media.mit.edu/research", "MIT Media Lab Research"),
+            ("https://www.media.mit.edu/news", "MIT Media Lab News"),
+            ("https://www.media.mit.edu/publications", "MIT Media Lab Publications")
+        ]
+        
+        for url, section_name in mit_sections:
+            try:
+                response = self.safe_request(url)
+                if response:
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Look for various content types
+                    selectors = [
+                        'article',
+                        '[class*="news"]',
+                        '[class*="research"]', 
+                        '[class*="project"]',
+                        '[class*="publication"]',
+                        '[class*="story"]',
+                        '[class*="post"]',
+                        '[class*="item"]',
+                        'h1', 'h2', 'h3', 'h4'
+                    ]
+                    
+                    article_elements = []
+                    for selector in selectors:
+                        elements = soup.select(selector)
+                        article_elements.extend(elements)
+                    
+                    # Remove duplicates while preserving order
+                    seen = set()
+                    unique_elements = []
+                    for elem in article_elements:
+                        if elem not in seen:
+                            seen.add(elem)
+                            unique_elements.append(elem)
+                    
+                    section_articles = []
+                    for elem in unique_elements[:5]:  # Limit to 5 articles per section
+                        article_data = self.extract_article_data(elem, section_name, "Technology & Architecture")
+                        if article_data:
+                            section_articles.append(article_data)
+                    
+                    if section_articles:
+                        logger.info(f"✅ Scraped {len(section_articles)} articles from {section_name}")
+                        all_articles.extend(section_articles)
+                        
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to scrape {section_name}: {e}")
+        
+        # Fallback to main website scraping if no articles found
+        if not all_articles:
+            url = "https://www.media.mit.edu/"
+            response = self.safe_request(url)
+            if response:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # MIT Media Lab has a unique structure - look for various content types
+                selectors = [
+                    'article',
+                    '[class*="news"]',
+                    '[class*="research"]', 
+                    '[class*="project"]',
+                    '[class*="publication"]',
+                    '[class*="story"]',
+                    '[class*="post"]',
+                    'h1', 'h2', 'h3', 'h4'
+                ]
+                
+                article_elements = []
+                for selector in selectors:
+                    elements = soup.select(selector)
+                    article_elements.extend(elements)
+                
+                # Remove duplicates while preserving order
+                seen = set()
+                unique_elements = []
+                for elem in article_elements:
+                    if elem not in seen:
+                        seen.add(elem)
+                        unique_elements.append(elem)
+                
+                for elem in unique_elements[:self.articles_per_source]:
+                    article_data = self.extract_article_data(elem, "MIT Media Lab", "Technology & Architecture")
+                    if article_data:
+                        all_articles.append(article_data)
+        
+        # Remove duplicates based on title
+        seen_titles = set()
+        unique_articles = []
+        for article in all_articles:
+            if article['title'] not in seen_titles:
+                seen_titles.add(article['title'])
+                unique_articles.append(article)
+        
+        logger.info(f"✅ Total scraped {len(unique_articles)} unique articles from MIT Media Lab")
+        return unique_articles
+
     def scrape_all_sources(self):
         """Scrape articles from all architectural sources sequentially"""
         sources = [
@@ -260,7 +403,8 @@ class WebScraper:
             ('DesignBoom', self.scrape_designboom),
             ('Architizer', self.scrape_architizer),
             ('Interior Design', self.scrape_interior_design),
-            ('Architectural Record', self.scrape_architectural_record)
+            ('Architectural Record', self.scrape_architectural_record),
+            ('MIT Media Lab', self.scrape_mit_media_lab)
         ]
         
         all_articles = []
