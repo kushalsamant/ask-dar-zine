@@ -527,6 +527,58 @@ CACHE_MAX_AGE_HOURS=24        # Cache freshness in hours
 - **Reliability**: Fallback responses during API downtime
 - **Storage**: Automatic cleanup prevents disk space issues
 
+## 📸 Instagram Integration
+
+### **PDF to Instagram Conversion**
+Convert your generated PDFs to Instagram-optimized images:
+
+```bash
+# Convert latest PDF to both formats
+python daily_zine_generator.py --convert-pdf
+
+# Convert to Instagram posts only
+python daily_zine_generator.py --instagram-posts
+
+# Convert to Instagram stories only
+python daily_zine_generator.py --instagram-stories
+
+# Convert specific PDF file
+python daily_zine_generator.py --pdf-path "path/to/your.pdf" --both-formats
+```
+
+### **Generated Image Formats**
+- **📱 Square Posts (1080x1080)**: `instagram_images/` directory
+- **📱 Instagram Stories (1080x1920)**: `instagram_stories/` directory
+
+### **Instagram Posting Strategy**
+1. **Square Posts (Feed)**:
+   - Select images from `instagram_images/` folder
+   - Use recommended caption with hashtags
+   - Post consistently at 2-4 PM or 7-9 PM
+
+2. **Instagram Stories**:
+   - Upload from `instagram_stories/` folder
+   - Add text overlays for engagement
+   - Use story features for interaction
+
+3. **Recommended Caption**:
+   ```
+   🏛️ ASK Daily Architectural Research Zine
+   
+   📅 Volume 212 - Abstract Style
+   🎨 AI-Generated Architectural Imagery
+   ✍️ Poetic Captions by AI
+   
+   #architecture #design #aiart #architecturalresearch #dailyzine #abstract #artificialintelligence #designinspiration #architecturalphotography #modernarchitecture
+   ```
+
+### **Performance Tips**
+- Post consistently at the same time daily
+- Use Instagram Insights to track engagement
+- Experiment with different hashtag combinations
+- Engage with your audience in comments
+- Cross-post to other platforms (Twitter, LinkedIn)
+
 ## 🔍 Troubleshooting
 
 ### **Common Issues**

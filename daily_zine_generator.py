@@ -1698,6 +1698,11 @@ def main():
     parser.add_argument('--batch-sources', action='store_true', help='Add batch of predefined sources')
     parser.add_argument('--fast', action='store_true', help='Enable fast mode (Free Tier Optimized)')
     parser.add_argument('--ultra', action='store_true', help='Enable ultra mode (Conservative Free Tier Optimization)')
+    parser.add_argument('--convert-pdf', action='store_true', help='Convert latest PDF to Instagram images')
+    parser.add_argument('--pdf-path', type=str, help='Specific PDF path for conversion')
+    parser.add_argument('--instagram-posts', action='store_true', help='Convert to Instagram posts (square format)')
+    parser.add_argument('--instagram-stories', action='store_true', help='Convert to Instagram stories (9:16 format)')
+    parser.add_argument('--both-formats', action='store_true', help='Convert to both posts and stories')
     
     args = parser.parse_args()
     
@@ -1742,6 +1747,40 @@ def main():
     # Handle batch source addition
     if args.batch_sources:
         add_batch_manual_sources()
+        return
+    
+    # Handle PDF to Instagram conversion
+    if args.convert_pdf or args.instagram_posts or args.instagram_stories or args.both_formats:
+        log.info("📸 Converting PDF to Instagram images...")
+        
+        if args.pdf_path:
+            pdf_path = Path(args.pdf_path)
+            if not pdf_path.exists():
+                log.error(f"❌ PDF file not found: {pdf_path}")
+                return
+        else:
+            pdf_path = get_latest_pdf()
+            if not pdf_path:
+                return
+        
+        if args.instagram_posts or args.both_formats:
+            posts = convert_pdf_to_instagram_images(pdf_path)
+            if posts:
+                log.info(f"✅ Converted to {len(posts)} Instagram posts")
+        
+        if args.instagram_stories or args.both_formats:
+            stories = create_instagram_story_images(pdf_path)
+            if stories:
+                log.info(f"✅ Converted to {len(stories)} Instagram stories")
+        
+        if not args.instagram_posts and not args.instagram_stories and not args.both_formats:
+            # Default: convert to both formats
+            posts, stories = convert_latest_pdf_to_instagram()
+            if posts:
+                log.info(f"✅ Converted to {len(posts)} Instagram posts")
+            if stories:
+                log.info(f"✅ Converted to {len(stories)} Instagram stories")
+        
         return
     
     log.info("🚀 Starting Daily Zine Generator - Free Tier Optimized")
@@ -1869,6 +1908,200 @@ def main():
             log.info("✅ All steps completed with concurrent processing!")
         else:
             log.error("❌ Failed to create daily PDF")
+
+# === 📸 PDF to Instagram Conversion Functions ===
+def get_latest_pdf():
+    """Get the most recent PDF file from daily_pdfs directory"""
+    pdf_dir = Path("daily_pdfs")
+    if not pdf_dir.exists():
+        log.error("❌ daily_pdfs directory not found")
+        return None
+    
+    pdf_files = list(pdf_dir.glob("*.pdf"))
+    if not pdf_files:
+        log.error("❌ No PDF files found in daily_pdfs directory")
+        return None
+    
+    # Get the most recent PDF
+    latest_pdf = max(pdf_files, key=lambda x: x.stat().st_mtime)
+    log.info(f"📄 Found latest PDF: {latest_pdf.name}")
+    return latest_pdf
+
+def convert_pdf_to_instagram_images(pdf_path, output_dir="instagram_images", dpi=300):
+    """Convert PDF pages to Instagram-optimized PNG images"""
+    
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+    
+    log.info(f"🔄 Converting PDF to Instagram images...")
+    log.info(f"📁 Output directory: {output_path}")
+    
+    try:
+        # Import PyMuPDF
+        import fitz
+        import io
+        
+        # Open PDF with PyMuPDF
+        doc = fitz.open(pdf_path)
+        
+        # Instagram dimensions (square format)
+        instagram_size = (1080, 1080)  # Instagram square post
+        
+        converted_images = []
+        
+        for page_num in range(len(doc)):
+            log.info(f"📄 Processing page {page_num+1}/{len(doc)}")
+            
+            # Get page
+            page = doc.load_page(page_num)
+            
+            # Calculate zoom factor for desired DPI
+            zoom = dpi / 72  # PyMuPDF uses 72 DPI as base
+            mat = fitz.Matrix(zoom, zoom)
+            
+            # Render page to image
+            pix = page.get_pixmap(matrix=mat)
+            
+            # Convert to PIL Image
+            img_data = pix.tobytes("png")
+            image = Image.open(io.BytesIO(img_data))
+            
+            # Convert to RGB if necessary
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Resize to Instagram dimensions while maintaining aspect ratio
+            img_width, img_height = image.size
+            scale = min(instagram_size[0] / img_width, instagram_size[1] / img_height)
+            
+            new_width = int(img_width * scale)
+            new_height = int(img_height * scale)
+            
+            # Resize image
+            resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Create square canvas with white background
+            square_image = Image.new('RGB', instagram_size, 'white')
+            
+            # Center the resized image on the square canvas
+            x_offset = (instagram_size[0] - new_width) // 2
+            y_offset = (instagram_size[1] - new_height) // 2
+            square_image.paste(resized_image, (x_offset, y_offset))
+            
+            # Save as PNG
+            output_filename = f"instagram_page_{page_num+1:02d}.png"
+            output_file = output_path / output_filename
+            square_image.save(output_file, 'PNG', quality=95)
+            
+            converted_images.append(str(output_file))
+            log.info(f"✅ Saved: {output_filename}")
+        
+        doc.close()
+        log.info(f"🎉 Converted {len(converted_images)} pages to Instagram images")
+        return converted_images
+        
+    except ImportError:
+        log.error("❌ PyMuPDF not installed. Install with: pip install PyMuPDF")
+        return None
+    except Exception as e:
+        log.error(f"❌ PDF conversion failed: {e}")
+        return None
+
+def create_instagram_story_images(pdf_path, output_dir="instagram_stories", dpi=300):
+    """Convert PDF pages to Instagram story format (9:16 aspect ratio)"""
+    
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+    
+    log.info(f"🔄 Converting PDF to Instagram stories...")
+    log.info(f"📁 Output directory: {output_path}")
+    
+    try:
+        # Import PyMuPDF
+        import fitz
+        import io
+        
+        # Open PDF with PyMuPDF
+        doc = fitz.open(pdf_path)
+        
+        # Instagram story dimensions (9:16 aspect ratio)
+        story_size = (1080, 1920)  # Instagram story format
+        
+        converted_stories = []
+        
+        for page_num in range(len(doc)):
+            log.info(f"📄 Processing story {page_num+1}/{len(doc)}")
+            
+            # Get page
+            page = doc.load_page(page_num)
+            
+            # Calculate zoom factor for desired DPI
+            zoom = dpi / 72  # PyMuPDF uses 72 DPI as base
+            mat = fitz.Matrix(zoom, zoom)
+            
+            # Render page to image
+            pix = page.get_pixmap(matrix=mat)
+            
+            # Convert to PIL Image
+            img_data = pix.tobytes("png")
+            image = Image.open(io.BytesIO(img_data))
+            
+            # Convert to RGB if necessary
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Resize to Instagram story dimensions while maintaining aspect ratio
+            img_width, img_height = image.size
+            scale = min(story_size[0] / img_width, story_size[1] / img_height)
+            
+            new_width = int(img_width * scale)
+            new_height = int(img_height * scale)
+            
+            # Resize image
+            resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Create story canvas with white background
+            story_image = Image.new('RGB', story_size, 'white')
+            
+            # Center the resized image on the story canvas
+            x_offset = (story_size[0] - new_width) // 2
+            y_offset = (story_size[1] - new_height) // 2
+            story_image.paste(resized_image, (x_offset, y_offset))
+            
+            # Save as PNG
+            output_filename = f"instagram_story_{page_num+1:02d}.png"
+            output_file = output_path / output_filename
+            story_image.save(output_file, 'PNG', quality=95)
+            
+            converted_stories.append(str(output_file))
+            log.info(f"✅ Saved: {output_filename}")
+        
+        doc.close()
+        log.info(f"🎉 Converted {len(converted_stories)} pages to Instagram stories")
+        return converted_stories
+        
+    except ImportError:
+        log.error("❌ PyMuPDF not installed. Install with: pip install PyMuPDF")
+        return None
+    except Exception as e:
+        log.error(f"❌ Story conversion failed: {e}")
+        return None
+
+def convert_latest_pdf_to_instagram():
+    """Convert the latest PDF to both Instagram posts and stories"""
+    latest_pdf = get_latest_pdf()
+    if not latest_pdf:
+        return None, None
+    
+    # Convert to Instagram posts
+    posts = convert_pdf_to_instagram_images(latest_pdf)
+    
+    # Convert to Instagram stories
+    stories = create_instagram_story_images(latest_pdf)
+    
+    return posts, stories
 
 if __name__ == "__main__":
     main() 
