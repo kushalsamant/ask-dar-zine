@@ -8,10 +8,6 @@ import os
 import json
 import argparse
 from datetime import datetime
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv('ask.env')
 
 def load_existing_sources():
     """Load existing architectural sources"""
@@ -110,48 +106,36 @@ def remove_source(name):
     return False
 
 def add_batch_sources():
-    """Add multiple sources from a predefined list"""
+    """Add a batch of predefined sources"""
     batch_sources = [
-        # Academic & Research Institutions
         {"name": "AA School of Architecture", "url": "https://www.aaschool.ac.uk/feed", "category": "Academic"},
         {"name": "Berlage Institute", "url": "https://theberlage.nl/feed", "category": "Academic"},
+        {"name": "ETH Zurich Architecture", "url": "https://arch.ethz.ch/feed", "category": "Academic"},
         {"name": "TU Delft Architecture", "url": "https://www.tudelft.nl/en/architecture-and-the-built-environment/feed", "category": "Academic"},
         {"name": "UCL Bartlett", "url": "https://www.ucl.ac.uk/bartlett/feed", "category": "Academic"},
         {"name": "Cornell Architecture", "url": "https://aap.cornell.edu/feed", "category": "Academic"},
         {"name": "Princeton Architecture", "url": "https://soa.princeton.edu/feed", "category": "Academic"},
         {"name": "UC Berkeley Architecture", "url": "https://ced.berkeley.edu/architecture/feed", "category": "Academic"},
-        
-        # International Publications
         {"name": "Architectural Review Asia Pacific", "url": "https://www.architectural-review.com/feed", "category": "International"},
         {"name": "Architecture Australia", "url": "https://architectureau.com/feed", "category": "International"},
         {"name": "Canadian Architect", "url": "https://www.canadianarchitect.com/feed", "category": "International"},
         {"name": "Architectural Digest India", "url": "https://www.architecturaldigest.in/feed", "category": "International"},
         {"name": "Architectural Digest Middle East", "url": "https://www.architecturaldigestme.com/feed", "category": "International"},
         {"name": "Architectural Digest China", "url": "https://www.architecturaldigest.cn/feed", "category": "International"},
-        
-        # Specialized Research
         {"name": "Architectural Science Review", "url": "https://www.tandfonline.com/feed/rss/rjar20", "category": "Research"},
         {"name": "Journal of Architectural Education", "url": "https://www.tandfonline.com/feed/rss/rjae20", "category": "Research"},
         {"name": "Architecture Research Quarterly", "url": "https://www.cambridge.org/core/journals/architecture-research-quarterly/feed", "category": "Research"},
         {"name": "International Journal of Architectural Computing", "url": "https://journals.sagepub.com/feed/ijac", "category": "Research"},
-        
-        # Innovation & Technology
         {"name": "Archinect", "url": "https://archinect.com/feed", "category": "Innovation"},
         {"name": "Architecture Lab", "url": "https://www.architecturelab.net/feed", "category": "Innovation"},
         {"name": "Architecture Now", "url": "https://architecturenow.co.nz/feed", "category": "Innovation"},
         {"name": "Architecture & Design", "url": "https://www.architectureanddesign.com.au/feed", "category": "Innovation"},
-        
-        # Regional & Cultural
         {"name": "Architect Magazine", "url": "https://www.architectmagazine.com/rss", "category": "Regional"},
         {"name": "Architecture Week", "url": "https://www.architectureweek.com/feed", "category": "Regional"},
-        
-        # Emerging & Alternative
         {"name": "Architecture Foundation", "url": "https://architecturefoundation.org.uk/feed", "category": "Emerging"},
         {"name": "Architectural League", "url": "https://archleague.org/feed", "category": "Emerging"},
         {"name": "Storefront for Art and Architecture", "url": "https://storefrontnews.org/feed", "category": "Emerging"},
         {"name": "Architecture for Humanity", "url": "https://architectureforhumanity.org/feed", "category": "Emerging"},
-        
-        # Digital & Computational
         {"name": "Digital Architecture", "url": "https://digitalarchitecture.org/feed", "category": "Digital"},
         {"name": "Computational Architecture", "url": "https://computationalarchitecture.net/feed", "category": "Digital"},
         {"name": "Parametric Architecture", "url": "https://parametric-architecture.com/feed", "category": "Digital"},
@@ -178,6 +162,8 @@ def add_batch_sources():
         print(f"📊 Total sources: {len(existing_feeds)}")
     else:
         print("❌ Error saving sources")
+    
+    return added_count
 
 def main():
     parser = argparse.ArgumentParser(description="Manual Source Addition Tool")

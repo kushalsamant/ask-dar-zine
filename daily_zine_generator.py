@@ -120,11 +120,11 @@ def save_to_cache(key, data):
         log.debug(f"Cache save failed: {e}")
 
 def load_from_cache(key, max_age_hours=None):
-    if max_age_hours is None:
-        max_age_hours = int(get_env('CACHE_MAX_AGE_HOURS', '24'))
     """Load data from cache if available and fresh"""
     if not CACHE_ENABLED:
         return None
+    if max_age_hours is None:
+        max_age_hours = int(get_env('CACHE_MAX_AGE_HOURS', '24'))
     try:
         cache_path = get_cache_path(key)
         if cache_path.exists():
@@ -305,9 +305,9 @@ class FreshRSSAutomation:
         return feeds
     
     def get_recent_articles(self, hours: int = None):
+        """Get recent articles from FreshRSS database"""
         if hours is None:
             hours = int(get_env('FRESHRSS_ARTICLES_HOURS', '24'))
-        """Get recent articles from FreshRSS database"""
         articles = []
         
         try:
@@ -790,7 +790,7 @@ def call_llm(prompt, system_prompt=None):
         return cached_result
     
     if TEXT_PROVIDER == 'groq':
-        url = f"{GROQ_API_BASE}/chat/completions"
+        url = get_env('GROQ_API_URL', 'https://api.groq.com/openai/v1/chat/completions')
         api_key = GROQ_API_KEY
         model = TEXT_MODEL
     else:
@@ -819,7 +819,7 @@ def call_llm(prompt, system_prompt=None):
         "Content-Type": "application/json"
     }
     
-    max_retries = int(get_env('MAX_RETRIES', '3'))
+    max_retries = int(get_env('LLM_MAX_RETRIES', '3'))
     retry_delays = [int(x.strip()) for x in get_env('LLM_RETRY_DELAYS', '60,120,180').split(',')]
     
     for attempt in range(max_retries):
@@ -959,15 +959,14 @@ def generate_unique_caption(prompt, existing_captions, max_attempts=None):
                 ]):
                     lines.append(line)
             
-            # Ensure exactly configured number of lines
-            max_lines = int(get_env('CAPTION_MAX_LINES', '6'))
-            if len(lines) >= max_lines:
-                result = '\n'.join(lines[:max_lines])
+            # Ensure exactly 6 lines
+            if len(lines) >= 6:
+                result = '\n'.join(lines[:6])
             else:
                 # Pad with sophisticated lines if needed
-                while len(lines) < max_lines:
+                while len(lines) < 6:
                     lines.append("Architecture speaks through silent spaces")
-                result = '\n'.join(lines[:max_lines])
+                result = '\n'.join(lines[:6])
             
             # Check if this caption is unique
             if is_caption_unique(result, existing_captions):
@@ -1007,7 +1006,7 @@ def generate_single_image(prompt, style_name, image_number):
     """Generate a single image using Together.ai API"""
     log.info(f"🎨 Generating {style_name} image {image_number}")
     
-    style_dir = os.path.join(get_env('IMAGES_DIR', 'images'), style_name)
+    style_dir = os.path.join("images", style_name)
     os.makedirs(style_dir, exist_ok=True)
     
     # Get enhanced style configuration with sophisticated prompts
@@ -1038,7 +1037,7 @@ def generate_single_image(prompt, style_name, image_number):
         "Content-Type": "application/json"
     }
     
-    max_retries = int(get_env('MAX_RETRIES', '3'))
+    max_retries = int(get_env('IMAGE_MAX_RETRIES', '3'))
     retry_delays = [int(x.strip()) for x in get_env('IMAGE_RETRY_DELAYS', '60,120,180').split(',')]
     
     for attempt in range(max_retries):
@@ -1068,7 +1067,7 @@ def generate_single_image(prompt, style_name, image_number):
                                 f.write(image_response.content)
                             
                             log.info(f"✅ Generated {style_name} image {image_number}: {image_filename}")
-                            time.sleep(float(get_env('IMAGE_POST_GENERATION_DELAY', '3')))  # Configurable rate limiting after successful image generation
+                            time.sleep(3)  # Increased rate limiting after successful image generation
                             return image_path
                         else:
                             log.error(f"❌ Failed to download image from {image_url} (HTTP {image_response.status_code})")
@@ -1132,7 +1131,7 @@ def generate_all_images(prompts, style_name):
     max_workers = MAX_CONCURRENT_IMAGES if not FAST_MODE else 1
     
     # Pre-create style directory for all images
-    style_dir = Path(get_env('IMAGES_DIR', 'images')) / style_name
+    style_dir = Path("images") / style_name
     style_dir.mkdir(parents=True, exist_ok=True)
     
     def generate_image_with_index(args):
@@ -1154,7 +1153,7 @@ def generate_all_images(prompts, style_name):
             return i, None, str(e)
     
     # Process in batches for better memory management
-    batch_size = 25 if BATCH_PROCESSING else len(prompts)
+    batch_size = int(get_env('BATCH_SIZE', '25')) if BATCH_PROCESSING else len(prompts)
     
     with tqdm(total=len(prompts), desc=f"🖼️ Generating {style_name} images", unit="image") as pbar:
         for batch_start in range(0, len(prompts), batch_size):
@@ -1274,7 +1273,7 @@ def place_caption_with_white_band(c, caption, w, h, page_num):
     line_spacing = int(get_env('PDF_LINE_SPACING', '18'))
     padding_x = int(get_env('PDF_PADDING_X', '24'))
     padding_y = int(get_env('PDF_PADDING_Y', '16'))
-    top_padding = int(get_env('PDF_TOP_PADDING', '40'))  # Configurable top padding for better separation from image
+    top_padding = int(get_env('PDF_TOP_PADDING', '40'))  # Increased top padding for better separation from image
 
     # Calculate text dimensions
     c.setFont("Helvetica-Bold", font_size)
@@ -1435,16 +1434,16 @@ def main():
         global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = float(get_env('ULTRA_MODE_DELAY', '0.4'))  # Configurable for faster but still safe operation
+        RATE_LIMIT_DELAY = 0.4  # 400ms for faster but still safe operation
     
     # Override settings for ultra mode (Free Tier Optimized - Conservative)
     if args.ultra:
         global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY, MAX_CONCURRENT_IMAGES, MAX_CONCURRENT_CAPTIONS
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = float(get_env('ULTRA_MODE_DELAY', '0.4'))  # Configurable - conservative for free tier safety
-        MAX_CONCURRENT_IMAGES = int(get_env('ULTRA_MODE_CONCURRENT_IMAGES', '10'))  # Configurable conservative increase
-        MAX_CONCURRENT_CAPTIONS = int(get_env('ULTRA_MODE_CONCURRENT_CAPTIONS', '10'))  # Configurable conservative increase
+        RATE_LIMIT_DELAY = 0.4  # 400ms - conservative for free tier safety
+        MAX_CONCURRENT_IMAGES = 10  # Conservative increase
+        MAX_CONCURRENT_CAPTIONS = 10  # Conservative increase
     
     # Handle sources display
     if args.sources:
@@ -1505,8 +1504,7 @@ def main():
             time.sleep(2)  # Rate limiting between major steps
         
         # Step 3: Generate prompts
-        test_count = int(get_env('TEST_IMAGE_COUNT', '5'))
-        num_prompts = test_count if args.test else args.images
+        num_prompts = int(get_env('TEST_IMAGE_COUNT', '5')) if args.test else args.images
         log.info("=" * 60)
         log.info(f"✍️ STEP 3/6: Generating {num_prompts} prompts")
         log.info("=" * 60)
