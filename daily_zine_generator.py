@@ -31,6 +31,17 @@ import pickle
 import gc
 
 
+# === 📥 Load environment variables ===
+from dotenv import load_dotenv
+load_dotenv('ask.env')
+
+def get_env(var, default=None, required=False):
+    value = os.getenv(var, default)
+    if required and not value:
+        print(f"Required environment variable '{var}' is missing. Exiting.")
+        sys.exit(1)
+    return value
+
 # === 🔧 Setup real-time logging ===
 LOG_DIR = get_env('LOG_DIR', 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -86,16 +97,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from PIL import Image
 from tqdm import tqdm
-
-# === 📥 Load environment variables ===
-load_dotenv('ask.env')
-
-def get_env(var, default=None, required=False):
-    value = os.getenv(var, default)
-    if required and not value:
-        log.error(f"Required environment variable '{var}' is missing. Exiting.")
-        sys.exit(1)
-    return value
 
 # === 📊 Configuration ===
 
@@ -1429,16 +1430,17 @@ def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
     
+    # Declare global variables that might be modified
+    global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY, MAX_CONCURRENT_IMAGES, MAX_CONCURRENT_CAPTIONS
+    
     # Override settings for fast mode (Free Tier Optimized)
     if args.fast:
-        global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
         RATE_LIMIT_DELAY = 0.4  # 400ms for faster but still safe operation
     
     # Override settings for ultra mode (Free Tier Optimized - Conservative)
     if args.ultra:
-        global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY, MAX_CONCURRENT_IMAGES, MAX_CONCURRENT_CAPTIONS
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
         RATE_LIMIT_DELAY = 0.4  # 400ms - conservative for free tier safety
