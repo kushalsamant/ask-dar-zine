@@ -11,7 +11,7 @@ This document provides **detailed inline descriptions for every line of code** i
 ```
 ask-dar-zine/
 ├── daily_zine_generator.py      # 🎯 Main pipeline orchestrator (1570 lines)
-├── add_manual_sources.py       # 🔧 Source management utility (200+ lines)
+├── manual_sources.txt          # 📝 Manual source management (text file)
 ├── docker-compose.yml          # 🐳 FreshRSS containerization (50+ lines)
 ├── ask.env                     # ⚙️ Environment configuration (100+ lines)
 ├── ask.env.template            # 📋 Environment template (100+ lines)
@@ -278,57 +278,43 @@ def get_daily_style():
 
 ---
 
-## 🔧 Source Management: `add_manual_sources.py`
+## 🔧 Source Management: `manual_sources.txt`
 
 ### **File Purpose**
-This utility script provides command-line interface for managing architectural RSS feed sources manually.
+This text file provides a simple, human-readable format for managing architectural RSS feed sources manually.
 
-### **Key Functions**
-
-#### **load_existing_sources()**
-```python
-def load_existing_sources():
-    """Load existing architectural sources from JSON file"""
-    existing_feeds_file = "existing_architectural_feeds.json"  # Source file path
-    existing_feeds = []                                        # Initialize empty list
-    
-    if os.path.exists(existing_feeds_file):                   # Check if file exists
-        try:
-            with open(existing_feeds_file, 'r') as f:         # Open file for reading
-                existing_feeds = json.load(f)                 # Load JSON data
-            print(f"✅ Loaded {len(existing_feeds)} existing sources")  # Log success
-        except Exception as e:
-            print(f"⚠️ Error loading existing sources: {e}")  # Log error
-    
-    return existing_feeds                                      # Return loaded sources
+### **File Format**
+```
+# Comments start with #
+Name|URL|Category
 ```
 
-#### **add_source(name, url, category)**
-```python
-def add_source(name, url, category):
-    """Add a single architectural source to the collection"""
-    existing_feeds = load_existing_sources()                   # Load current sources
-    
-    # Check if source already exists
-    for feed in existing_feeds:                               # Iterate through existing feeds
-        if feed.get('name') == name:                         # Check for duplicate name
-            print(f"⚠️ Source '{name}' already exists")      # Warn about duplicate
-            return False                                      # Return failure
-    
-    # Add new source
-    new_source = {                                            # Create new source dictionary
-        "name": name,                                         # Source name
-        "url": url,                                           # RSS feed URL
-        "category": category,                                 # Source category
-        "added_at": datetime.now().isoformat()               # Timestamp
-    }
-    
-    existing_feeds.append(new_source)                        # Add to existing feeds
-    
-    if save_sources(existing_feeds):                         # Save updated sources
-        print(f"✅ Added source: {name} ({category})")       # Log success
-        return True                                           # Return success
-    return False                                              # Return failure
+### **Example Content**
+```
+# Academic Institutions
+AA School of Architecture|https://www.aaschool.ac.uk/feed|Academic
+Berlage Institute|https://theberlage.nl/feed|Academic
+
+# International Publications
+Architectural Review Asia Pacific|https://www.architectural-review.com/feed|International
+```
+
+### **Integration with Main Script**
+The main script (`daily_zine_generator.py`) includes functions to:
+- **add_manual_source()**: Add sources to the text file
+- **remove_manual_source()**: Remove sources from the text file  
+- **add_batch_manual_sources()**: Import all sources from text file to JSON
+
+### **Command Line Usage**
+```bash
+# Add a single source
+python daily_zine_generator.py --add-source "Name" "URL" "Category"
+
+# Remove a source
+python daily_zine_generator.py --remove-source "Name"
+
+# Import all sources from text file
+python daily_zine_generator.py --batch-sources
 ```
 
 ---

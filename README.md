@@ -133,7 +133,7 @@ python daily_zine_generator.py --images 10 --style technical
 ```
 ask-dar-zine/
 ├── daily_zine_generator.py      # 🎯 Complete zine generation pipeline
-├── add_manual_sources.py       # 🔧 Manual source management tool
+├── manual_sources.txt          # 📝 Manual source management (text file)
 ├── docker-compose.yml          # 🐳 FreshRSS Docker setup
 ├── ask.env                     # ⚙️ Environment variables (API keys, config)
 ├── ask.env.template            # 📋 Template for environment variables
@@ -302,21 +302,33 @@ python daily_zine_generator.py --sources
 - **💻 Digital & Computational**: Parametric and computational architecture
 
 ### **Manual Source Management**
-Use the dedicated tool to manage architectural sources:
 
+#### Text File Approach
+Sources are managed through `manual_sources.txt` in a simple format:
+```
+Name|URL|Category
+```
+
+#### Command Line Interface
 ```bash
 # List all current sources
-python add_manual_sources.py --list
+python daily_zine_generator.py --sources
 
 # Add a single source
-python add_manual_sources.py --add "Source Name" "https://source.com/feed" "Category"
+python daily_zine_generator.py --add-source "Source Name" "https://source.com/feed" "Category"
 
-# Add batch of predefined sources
-python add_manual_sources.py --batch
+# Add batch of predefined sources from text file
+python daily_zine_generator.py --batch-sources
 
 # Remove a source
-python add_manual_sources.py --remove "Source Name"
+python daily_zine_generator.py --remove-source "Source Name"
 ```
+
+#### Manual Editing
+You can also directly edit `manual_sources.txt`:
+- Add new sources: `Name|URL|Category`
+- Comments start with `#`
+- One source per line
 
 **Categories**: Academic, Research, International, Innovation, Regional, Emerging, Digital
 

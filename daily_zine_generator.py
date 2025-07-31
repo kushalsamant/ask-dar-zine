@@ -779,38 +779,31 @@ def display_architectural_sources():
     return existing_feeds
 
 def add_manual_source(name, url, category):
-    """Add a single source manually"""
+    """Add a single source manually to the text file"""
     log.info(f"🔧 Adding manual source: {name}")
     
-    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
-    existing_feeds = []
-    
-    try:
-        if os.path.exists(existing_feeds_file):
-            with open(existing_feeds_file, 'r') as f:
-                existing_feeds = json.load(f)
-    except Exception as e:
-        log.warning(f"⚠️ Could not load existing feeds: {e}")
+    manual_sources_file = get_env('MANUAL_SOURCES_FILE', 'manual_sources.txt')
     
     # Check if source already exists
-    for feed in existing_feeds:
-        if feed.get('name') == name:
-            log.warning(f"⚠️ Source '{name}' already exists")
-            return False
+    try:
+        if os.path.exists(manual_sources_file):
+            with open(manual_sources_file, 'r', encoding='utf-8') as f:
+                existing_lines = f.readlines()
+            
+            for line in existing_lines:
+                line = line.strip()
+                if line and not line.startswith('#') and '|' in line:
+                    parts = line.split('|')
+                    if len(parts) >= 1 and parts[0].strip() == name:
+                        log.warning(f"⚠️ Source '{name}' already exists")
+                        return False
+    except Exception as e:
+        log.warning(f"⚠️ Could not check existing sources: {e}")
     
     # Add new source
-    new_source = {
-        "name": name,
-        "url": url,
-        "category": category,
-        "added_at": datetime.now().isoformat()
-    }
-    
-    existing_feeds.append(new_source)
-    
     try:
-        with open(existing_feeds_file, 'w') as f:
-            json.dump(existing_feeds, f, indent=2)
+        with open(manual_sources_file, 'a', encoding='utf-8') as f:
+            f.write(f"{name}|{url}|{category}\n")
         log.info(f"✅ Added source: {name} ({category})")
         return True
     except Exception as e:
@@ -818,108 +811,117 @@ def add_manual_source(name, url, category):
         return False
 
 def remove_manual_source(name):
-    """Remove a source by name"""
+    """Remove a source by name from the text file"""
     log.info(f"🔧 Removing source: {name}")
     
-    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
-    existing_feeds = []
+    manual_sources_file = get_env('MANUAL_SOURCES_FILE', 'manual_sources.txt')
     
     try:
-        if os.path.exists(existing_feeds_file):
-            with open(existing_feeds_file, 'r') as f:
-                existing_feeds = json.load(f)
+        if not os.path.exists(manual_sources_file):
+            log.warning(f"❌ Source file not found: {manual_sources_file}")
+            return False
+        
+        with open(manual_sources_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # Filter out the source to remove
+        new_lines = []
+        found = False
+        
+        for line in lines:
+            line_stripped = line.strip()
+            if line_stripped and not line_stripped.startswith('#') and '|' in line_stripped:
+                parts = line_stripped.split('|')
+                if len(parts) >= 1 and parts[0].strip() == name:
+                    found = True
+                    log.info(f"✅ Found and removing source: {name}")
+                else:
+                    new_lines.append(line)
+            else:
+                # Keep comments and empty lines
+                new_lines.append(line)
+        
+        if not found:
+            log.warning(f"❌ Source '{name}' not found")
+            return False
+        
+        # Write back the file without the removed source
+        with open(manual_sources_file, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+        
+        log.info(f"✅ Removed source: {name}")
+        return True
+        
     except Exception as e:
-        log.warning(f"⚠️ Could not load existing feeds: {e}")
+        log.error(f"❌ Error removing source: {e}")
         return False
-    
-    # Find and remove source
-    for i, feed in enumerate(existing_feeds):
-        if feed.get('name') == name:
-            removed = existing_feeds.pop(i)
-            try:
-                with open(existing_feeds_file, 'w') as f:
-                    json.dump(existing_feeds, f, indent=2)
-                log.info(f"✅ Removed source: {name}")
-                return True
-            except Exception as e:
-                log.error(f"❌ Error saving feeds: {e}")
-                return False
-    
-    log.warning(f"❌ Source '{name}' not found")
-    return False
 
 def add_batch_manual_sources():
-    """Add a batch of predefined sources"""
-    log.info("🔧 Adding batch of predefined sources...")
+    """Add a batch of predefined sources from the text file"""
+    log.info("🔧 Adding batch of predefined sources from text file...")
     
-    batch_sources = [
-        {"name": "AA School of Architecture", "url": "https://www.aaschool.ac.uk/feed", "category": "Academic"},
-        {"name": "Berlage Institute", "url": "https://theberlage.nl/feed", "category": "Academic"},
-        {"name": "ETH Zurich Architecture", "url": "https://arch.ethz.ch/feed", "category": "Academic"},
-        {"name": "TU Delft Architecture", "url": "https://www.tudelft.nl/en/architecture-and-the-built-environment/feed", "category": "Academic"},
-        {"name": "UCL Bartlett", "url": "https://www.ucl.ac.uk/bartlett/feed", "category": "Academic"},
-        {"name": "Cornell Architecture", "url": "https://aap.cornell.edu/feed", "category": "Academic"},
-        {"name": "Princeton Architecture", "url": "https://soa.princeton.edu/feed", "category": "Academic"},
-        {"name": "UC Berkeley Architecture", "url": "https://ced.berkeley.edu/architecture/feed", "category": "Academic"},
-        {"name": "Architectural Review Asia Pacific", "url": "https://www.architectural-review.com/feed", "category": "International"},
-        {"name": "Architecture Australia", "url": "https://architectureau.com/feed", "category": "International"},
-        {"name": "Canadian Architect", "url": "https://www.canadianarchitect.com/feed", "category": "International"},
-        {"name": "Architectural Digest India", "url": "https://www.architecturaldigest.in/feed", "category": "International"},
-        {"name": "Architectural Digest Middle East", "url": "https://www.architecturaldigestme.com/feed", "category": "International"},
-        {"name": "Architectural Digest China", "url": "https://www.architecturaldigest.cn/feed", "category": "International"},
-        {"name": "Architectural Science Review", "url": "https://www.tandfonline.com/feed/rss/rjar20", "category": "Research"},
-        {"name": "Journal of Architectural Education", "url": "https://www.tandfonline.com/feed/rss/rjae20", "category": "Research"},
-        {"name": "Architecture Research Quarterly", "url": "https://www.cambridge.org/core/journals/architecture-research-quarterly/feed", "category": "Research"},
-        {"name": "International Journal of Architectural Computing", "url": "https://journals.sagepub.com/feed/ijac", "category": "Research"},
-        {"name": "Archinect", "url": "https://archinect.com/feed", "category": "Innovation"},
-        {"name": "Architecture Lab", "url": "https://www.architecturelab.net/feed", "category": "Innovation"},
-        {"name": "Architecture Now", "url": "https://architecturenow.co.nz/feed", "category": "Innovation"},
-        {"name": "Architecture & Design", "url": "https://www.architectureanddesign.com.au/feed", "category": "Innovation"},
-        {"name": "Architect Magazine", "url": "https://www.architectmagazine.com/rss", "category": "Regional"},
-        {"name": "Architecture Week", "url": "https://www.architectureweek.com/feed", "category": "Regional"},
-        {"name": "Architecture Foundation", "url": "https://architecturefoundation.org.uk/feed", "category": "Emerging"},
-        {"name": "Architectural League", "url": "https://archleague.org/feed", "category": "Emerging"},
-        {"name": "Storefront for Art and Architecture", "url": "https://storefrontnews.org/feed", "category": "Emerging"},
-        {"name": "Architecture for Humanity", "url": "https://architectureforhumanity.org/feed", "category": "Emerging"},
-        {"name": "Digital Architecture", "url": "https://digitalarchitecture.org/feed", "category": "Digital"},
-        {"name": "Computational Architecture", "url": "https://computationalarchitecture.net/feed", "category": "Digital"},
-        {"name": "Parametric Architecture", "url": "https://parametric-architecture.com/feed", "category": "Digital"},
-        {"name": "Architecture and Computation", "url": "https://architectureandcomputation.com/feed", "category": "Digital"}
-    ]
+    manual_sources_file = get_env('MANUAL_SOURCES_FILE', 'manual_sources.txt')
     
-    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
-    existing_feeds = []
+    if not os.path.exists(manual_sources_file):
+        log.error(f"❌ Manual sources file not found: {manual_sources_file}")
+        return False
     
     try:
-        if os.path.exists(existing_feeds_file):
-            with open(existing_feeds_file, 'r') as f:
-                existing_feeds = json.load(f)
-    except Exception as e:
-        log.warning(f"⚠️ Could not load existing feeds: {e}")
-    
-    added_count = 0
-    
-    for source in batch_sources:
-        # Check if already exists
-        exists = any(feed.get('name') == source['name'] for feed in existing_feeds)
+        with open(manual_sources_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
         
-        if not exists:
-            source['added_at'] = datetime.now().isoformat()
-            existing_feeds.append(source)
-            added_count += 1
-            log.info(f"✅ Added: {source['name']} ({source['category']})")
-        else:
-            log.info(f"⚠️ Skipped: {source['name']} (already exists)")
-    
-    try:
-        with open(existing_feeds_file, 'w') as f:
-            json.dump(existing_feeds, f, indent=2)
-        log.info(f"\n🎉 Successfully added {added_count} new sources!")
-        log.info(f"📊 Total sources: {len(existing_feeds)}")
-        return added_count
+        added_count = 0
+        existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
+        existing_feeds = []
+        
+        # Load existing feeds
+        try:
+            if os.path.exists(existing_feeds_file):
+                with open(existing_feeds_file, 'r') as f:
+                    existing_feeds = json.load(f)
+        except Exception as e:
+            log.warning(f"⚠️ Could not load existing feeds: {e}")
+        
+        # Get existing source names
+        existing_names = {feed.get('name') for feed in existing_feeds}
+        
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('#') and '|' in line:
+                parts = line.split('|')
+                if len(parts) >= 3:
+                    name = parts[0].strip()
+                    url = parts[1].strip()
+                    category = parts[2].strip()
+                    
+                    # Check if already exists
+                    if name not in existing_names:
+                        new_source = {
+                            "name": name,
+                            "url": url,
+                            "category": category,
+                            "added_at": datetime.now().isoformat()
+                        }
+                        existing_feeds.append(new_source)
+                        existing_names.add(name)
+                        added_count += 1
+                        log.info(f"✅ Added: {name} ({category})")
+                    else:
+                        log.info(f"⏭️ Skipped (already exists): {name}")
+        
+        # Save updated feeds
+        try:
+            with open(existing_feeds_file, 'w') as f:
+                json.dump(existing_feeds, f, indent=2)
+            log.info(f"🎉 Successfully added {added_count} new sources from text file")
+            return True
+        except Exception as e:
+            log.error(f"❌ Error saving feeds: {e}")
+            return False
+            
     except Exception as e:
-        log.error(f"❌ Error saving sources: {e}")
-        return 0
+        log.error(f"❌ Error reading manual sources file: {e}")
+        return False
 
 # === 🤖 LLM Integration ===
 def call_llm(prompt, system_prompt=None):
