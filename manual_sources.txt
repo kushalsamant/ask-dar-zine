@@ -1,0 +1,38 @@
+# Manual Architectural Sources
+# Format: Name|URL|Category
+# One source per line
+# Lines starting with # are comments and will be ignored
+
+# Academic Institutions
+AA School of Architecture|https://www.aaschool.ac.uk/feed|Academic
+Berlage Institute|https://theberlage.nl/feed|Academic
+ETH Zurich Architecture|https://arch.ethz.ch/feed|Academic
+TU Delft Architecture|https://www.tudelft.nl/en/architecture-and-the-built-environment/feed|Academic
+UCL Bartlett|https://www.ucl.ac.uk/bartlett/feed|Academic
+Cornell Architecture|https://aap.cornell.edu/feed|Academic
+Princeton Architecture|https://soa.princeton.edu/feed|Academic
+UC Berkeley Architecture|https://ced.berkeley.edu/architecture/feed|Academic
+
+# International Publications
+Architectural Review Asia Pacific|https://www.architectural-review.com/feed|International
+Architecture Australia|https://architectureau.com/feed|International
+Canadian Architect|https://www.canadianarchitect.com/feed|International
+Architectural Digest India|https://www.architecturaldigest.in/feed|International
+Architectural Digest Middle East|https://www.architecturaldigestme.com/feed|International
+Architectural Digest China|https://www.architecturaldigest.cn/feed|International
+
+# Research Journals
+Architectural Science Review|https://www.tandfonline.com/feed/rss/rjar20|Research
+Journal of Architectural Education|https://www.tandfonline.com/feed/rss/rjae20|Research
+Architecture Research Quarterly|https://www.cambridge.org/core/journals/architecture-research-quarterly/feed|Research
+International Journal of Architectural Computing|https://journals.sagepub.com/feed/ijac|Research
+
+# Innovation & Design
+Archinect|https://archinect.com/feed|Innovation
+Architecture Lab|https://www.architecturelab.net/feed|Innovation
+Architecture Now|https://architecturenow.co.nz/feed|Innovation
+Architecture & Design|https://www.architectureanddesign.com.au/feed|Innovation
+
+# Regional Publications
+Architect Magazine|https://www.architectmagazine.com/rss|Regional
+Architecture Week|https://www.architectureweek.com/feed|Regional
