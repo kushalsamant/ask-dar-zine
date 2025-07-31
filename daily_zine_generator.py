@@ -27,7 +27,7 @@ import feedparser
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import pickle
-from functools import lru_cache
+
 import gc
 
 
@@ -86,8 +86,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from PIL import Image
 from tqdm import tqdm
-
-# FreshRSS automation is integrated into this file
 
 # === 📥 Load environment variables ===
 load_dotenv('ask.env')
@@ -148,10 +146,11 @@ IMAGE_HEIGHT = int(get_env('IMAGE_HEIGHT', '1024'))
 INFERENCE_STEPS = int(get_env('INFERENCE_STEPS', '4'))
 GUIDANCE_SCALE = float(get_env('GUIDANCE_SCALE', '7.5'))
 
-# Performance optimization settings
-MAX_CONCURRENT_IMAGES = int(get_env('MAX_CONCURRENT_IMAGES', '20'))
-MAX_CONCURRENT_CAPTIONS = int(get_env('MAX_CONCURRENT_CAPTIONS', '25'))
-RATE_LIMIT_DELAY = float(get_env('RATE_LIMIT_DELAY', '0.1'))
+# Performance optimization settings (Free Tier Optimized)
+# Free Tier Limit: ~100 requests/minute
+MAX_CONCURRENT_IMAGES = int(get_env('MAX_CONCURRENT_IMAGES', '8'))
+MAX_CONCURRENT_CAPTIONS = int(get_env('MAX_CONCURRENT_CAPTIONS', '8'))
+RATE_LIMIT_DELAY = float(get_env('RATE_LIMIT_DELAY', '0.6'))
 SKIP_CAPTION_DEDUPLICATION = get_env('SKIP_CAPTION_DEDUPLICATION', 'true').lower() == 'true'
 FAST_MODE = get_env('FAST_MODE', 'true').lower() == 'true'
 SKIP_WEB_SCRAPING = get_env('SKIP_WEB_SCRAPING', 'false').lower() == 'true'
@@ -1146,7 +1145,7 @@ def generate_all_images(prompts, style_name):
             return i, None, str(e)
     
     # Process in batches for better memory management
-    batch_size = 10 if BATCH_PROCESSING else len(prompts)
+    batch_size = 25 if BATCH_PROCESSING else len(prompts)
     
     with tqdm(total=len(prompts), desc=f"🖼️ Generating {style_name} images", unit="image") as pbar:
         for batch_start in range(0, len(prompts), batch_size):
@@ -1218,7 +1217,7 @@ def generate_all_captions(prompts):
             return i, None, str(e)
     
     # Process in batches for better memory management
-    batch_size = 15 if BATCH_PROCESSING else len(prompts)
+    batch_size = 25 if BATCH_PROCESSING else len(prompts)
     
     with tqdm(total=len(prompts), desc=f"📝 Generating captions", unit="caption") as pbar:
         for batch_start in range(0, len(prompts), batch_size):
@@ -1403,18 +1402,18 @@ def create_daily_pdf(images, captions, style_name, theme):
 
 # === 🚀 Main Function ===
 def main():
-    """Main function to run the daily zine generation with 10x speed optimizations"""
+    """Main function to run the daily zine generation with Free Tier Optimized settings"""
     
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Daily Zine Generator - Ultra Fast Mode')
+    parser = argparse.ArgumentParser(description='Daily Zine Generator - Free Tier Optimized')
     parser.add_argument('--test', action='store_true', help='Run in test mode with fewer images')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--images', type=int, default=50, help='Number of images to generate (default: 50)')
     parser.add_argument('--style', type=str, help='Force specific style (e.g., technical, abstract)')
     parser.add_argument('--theme', type=str, help='Force specific theme instead of web scraping')
     parser.add_argument('--sources', action='store_true', help='Display current architectural sources')
-    parser.add_argument('--fast', action='store_true', help='Enable ultra-fast mode (skip optional steps)')
-    parser.add_argument('--ultra', action='store_true', help='Enable 100x speed mode (maximum optimization)')
+    parser.add_argument('--fast', action='store_true', help='Enable fast mode (Free Tier Optimized)')
+    parser.add_argument('--ultra', action='store_true', help='Enable ultra mode (Conservative Free Tier Optimization)')
     
     args = parser.parse_args()
     
@@ -1422,21 +1421,21 @@ def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Override settings for ultra-fast mode
+    # Override settings for fast mode (Free Tier Optimized)
     if args.fast:
         global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = 0.1
+        RATE_LIMIT_DELAY = 0.4  # 400ms for faster but still safe operation
     
-    # Override settings for 100x speed mode
+    # Override settings for ultra mode (Free Tier Optimized - Conservative)
     if args.ultra:
         global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY, MAX_CONCURRENT_IMAGES, MAX_CONCURRENT_CAPTIONS
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = 0.05
-        MAX_CONCURRENT_IMAGES = 30
-        MAX_CONCURRENT_CAPTIONS = 40
+        RATE_LIMIT_DELAY = 0.4  # 400ms - conservative for free tier safety
+        MAX_CONCURRENT_IMAGES = 10  # Conservative increase
+        MAX_CONCURRENT_CAPTIONS = 10  # Conservative increase
     
     # Handle sources display
     if args.sources:
@@ -1444,13 +1443,14 @@ def main():
         display_architectural_sources()
         return
     
-    log.info("🚀 Starting Daily Zine Generator - 10x Speed Optimized")
+    log.info("🚀 Starting Daily Zine Generator - Free Tier Optimized")
     log.info(f"⚡ Fast Mode: {FAST_MODE}")
     log.info(f"🎨 Concurrent Images: {MAX_CONCURRENT_IMAGES}")
     log.info(f"📝 Concurrent Captions: {MAX_CONCURRENT_CAPTIONS}")
     log.info(f"⏱️ Rate Limit Delay: {RATE_LIMIT_DELAY}s")
     log.info(f"🚫 Skip Caption Deduplication: {SKIP_CAPTION_DEDUPLICATION}")
     log.info("📋 Pipeline: Web Scraping → Style Selection → Prompt Generation → Image Generation → Caption Generation → PDF Creation")
+    log.info("💰 Free Tier Limit: ~100 requests/minute - Conservative optimization for Together.ai free tier")
     
     # Start timing
     start_time = time.time()

@@ -57,13 +57,14 @@ jobs:
         echo "📅 Date: $(date '+%Y-%m-%d')"
         echo "⏰ Time: $(date '+%H:%M:%S %Z')"
         
-        # Run with test mode first to validate
+        # Run with test mode first to validate (Free Tier Optimized)
         python daily_zine_generator.py --test --debug --images 2 --theme "GitHub Action Test"
         
         if [ $? -eq 0 ]; then
           echo "✅ Test generation successful, proceeding with full generation"
+          echo "💰 Free Tier Optimized: ~100 requests/minute limit"
           
-          # Run full generation
+          # Run full generation (Free Tier Optimized)
           python daily_zine_generator.py --debug --images 50
           
           if [ $? -eq 0 ]; then

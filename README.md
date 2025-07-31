@@ -109,19 +109,19 @@ GUIDANCE_SCALE=7.5
 # Test run (5 images)
 python daily_zine_generator.py --test
 
-# Ultra-fast test run (skip optional steps)
+# Fast test run (Free Tier Optimized)
 python daily_zine_generator.py --test --fast
 
 # View current architectural sources
 python daily_zine_generator.py --sources
 
-# Full run (50 images) - 10x faster with concurrent processing
+# Full run (50 images) - Free Tier Optimized
 python daily_zine_generator.py
 
-# Ultra-fast full run (skip optional steps)
+# Fast full run (Free Tier Optimized)
 python daily_zine_generator.py --fast
 
-# 100x speed mode (maximum optimization)
+# Ultra mode (Conservative Free Tier Optimization)
 python daily_zine_generator.py --ultra
 
 # Custom options
@@ -150,30 +150,31 @@ ask-dar-zine/
 └── checkpoints/                # 💾 Pipeline progress checkpoints
 ```
 
-## ⚡ Performance Optimization
+## ⚡ Performance Optimization (Free Tier Optimized)
 
-### **100x Speed Improvements**
+### **Free Tier Optimized Performance**
 
-The pipeline now includes maximum performance optimizations:
+The pipeline is optimized for Together.ai free tier limits (~100 requests/minute):
 
-- **🔄 Massive Concurrent Processing**: Up to 30 concurrent image generations and 40 concurrent caption generations
+- **🔄 Conservative Concurrent Processing**: Up to 8 concurrent image generations and 8 concurrent caption generations
+- **🚀 Ultra Mode**: Up to 10 concurrent generations with `--ultra` flag (conservative for free tier)
 - **📦 Intelligent Caching**: Cache LLM responses and captions to avoid duplicate API calls
-- **⚡ Ultra-Fast Mode**: Skip optional steps with `--fast` flag
-- **🚀 100x Mode**: Maximum optimization with `--ultra` flag
+- **⚡ Fast Mode**: Optimized settings with `--fast` flag
+- **🚀 Ultra Mode**: Maximum optimization within free tier limits with `--ultra` flag
 - **🚫 Caption Deduplication**: Optional deduplication can be disabled for speed
-- **⏱️ Minimal Rate Limiting**: Reduced delays between API calls (0.05s)
-- **🎯 Smart Retry Logic**: Faster retry delays in fast mode
+- **⏱️ Free Tier Rate Limiting**: Conservative delays between API calls (0.6s default, 0.4s in ultra mode)
+- **🎯 Smart Retry Logic**: Progressive backoff delays for rate limit handling
 - **💾 Memory Optimization**: Batch processing and garbage collection
 - **📦 Style Preloading**: Preload architectural styles for instant access
 
-### **Performance Settings**
+### **Performance Settings (Free Tier Optimized)**
 
 Configure in `ask.env`:
 ```env
-# Performance Optimization
-MAX_CONCURRENT_IMAGES=20
-MAX_CONCURRENT_CAPTIONS=25
-RATE_LIMIT_DELAY=0.1
+# Performance Optimization (Free Tier Optimized)
+MAX_CONCURRENT_IMAGES=8
+MAX_CONCURRENT_CAPTIONS=8
+RATE_LIMIT_DELAY=0.6
 SKIP_CAPTION_DEDUPLICATION=true
 FAST_MODE=true
 CACHE_ENABLED=true
@@ -182,14 +183,14 @@ BATCH_PROCESSING=true
 OPTIMIZE_MEMORY=true
 ```
 
-### **Speed Comparison**
+### **Speed Comparison (Free Tier Optimized)**
 
-| Mode | Images | Estimated Time | Speed Improvement |
-|------|--------|----------------|-------------------|
-| Sequential | 50 | ~45 minutes | 1x |
-| Concurrent | 50 | ~8 minutes | 5.6x |
-| Ultra-Fast | 50 | ~4.5 minutes | 10x |
-| **100x Mode** | 50 | **~27 seconds** | **100x** |
+| Mode | Images | Estimated Time | Speed Improvement | Free Tier Safe |
+|------|--------|----------------|-------------------|----------------|
+| Sequential | 50 | ~45 minutes | 1x | ✅ |
+| Concurrent | 50 | ~8 minutes | 5.6x | ✅ |
+| Fast Mode | 50 | ~6 minutes | 7.5x | ✅ |
+| **Ultra Mode** | 50 | **~4 minutes** | **11x** | ✅ |
 
 ## 🔄 Pipeline Flow
 
