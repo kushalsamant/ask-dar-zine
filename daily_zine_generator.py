@@ -960,14 +960,15 @@ def generate_unique_caption(prompt, existing_captions, max_attempts=None):
                 ]):
                     lines.append(line)
             
-            # Ensure exactly 6 lines
-            if len(lines) >= 6:
-                result = '\n'.join(lines[:6])
+            # Ensure exactly configured number of lines
+            caption_line_count = int(get_env('CAPTION_LINE_COUNT', '6'))
+            if len(lines) >= caption_line_count:
+                result = '\n'.join(lines[:caption_line_count])
             else:
                 # Pad with sophisticated lines if needed
-                while len(lines) < 6:
+                while len(lines) < caption_line_count:
                     lines.append("Architecture speaks through silent spaces")
-                result = '\n'.join(lines[:6])
+                result = '\n'.join(lines[:caption_line_count])
             
             # Check if this caption is unique
             if is_caption_unique(result, existing_captions):
@@ -1437,15 +1438,15 @@ def main():
     if args.fast:
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = 0.4  # 400ms for faster but still safe operation
+        RATE_LIMIT_DELAY = float(get_env('FAST_MODE_DELAY', '0.4'))
     
     # Override settings for ultra mode (Free Tier Optimized - Conservative)
     if args.ultra:
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = 0.4  # 400ms - conservative for free tier safety
-        MAX_CONCURRENT_IMAGES = 10  # Conservative increase
-        MAX_CONCURRENT_CAPTIONS = 10  # Conservative increase
+        RATE_LIMIT_DELAY = float(get_env('ULTRA_MODE_DELAY', '0.4'))
+        MAX_CONCURRENT_IMAGES = int(get_env('ULTRA_MODE_CONCURRENT_IMAGES', '10'))
+        MAX_CONCURRENT_CAPTIONS = int(get_env('ULTRA_MODE_CONCURRENT_CAPTIONS', '10'))
     
     # Handle sources display
     if args.sources:
