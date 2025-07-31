@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 """
 Cache Optimizer - Standalone Script
-Optimize cache memory by removing old and large files
-Can be run independently or scheduled
+Optimizes cache memory by cleaning old files and managing cache size
+Runs automatically every Sunday or can be run manually
 """
 
 import os
 import sys
 import time
 import logging
-from pathlib import Path
+import shutil
 from datetime import datetime
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv('ask.env')
-
-def get_env(var, default=None):
-    """Get environment variable with default"""
-    return os.getenv(var, default)
+from pathlib import Path
+import gc
 
 # Setup logging
 logging.basicConfig(
@@ -30,170 +24,195 @@ logging.basicConfig(
 )
 log = logging.getLogger()
 
+def get_env(var, default=None):
+    """Get environment variable with default"""
+    return os.getenv(var, default)
+
 def optimize_cache_memory():
-    """Optimize cache memory by removing old and large files"""
-    cache_enabled = get_env('CACHE_ENABLED', 'true').lower() == 'true'
-    if not cache_enabled:
-        log.info("Cache is disabled, skipping optimization")
+    """Optimize cache memory by cleaning old files and compressing data"""
+    # Get cache directory
+    cache_dir = Path(get_env('CACHE_DIR', 'cache'))
+    if not cache_dir.exists():
+        log.info("📁 Cache directory doesn't exist, creating...")
+        cache_dir.mkdir(exist_ok=True)
         return
+    
+    # Get cache optimization settings
+    max_cache_age_days = int(get_env('CACHE_MAX_AGE_DAYS', '7'))
+    max_cache_size_mb = int(get_env('MAX_CACHE_SIZE_MB', '500'))
+    compression_enabled = get_env('CACHE_COMPRESSION_ENABLED', 'true').lower() == 'true'
     
     log.info("🧹 Starting cache optimization...")
-    
-    # Cache optimization settings
-    cache_dir = Path(get_env('CACHE_DIR', 'cache'))
-    max_cache_age_days = int(get_env('CACHE_MAX_AGE_DAYS', '7'))
-    max_cache_size_mb = int(get_env('CACHE_MAX_SIZE_MB', '500'))
-    max_file_size_mb = int(get_env('CACHE_MAX_FILE_SIZE_MB', '50'))
-    
-    if not cache_dir.exists():
-        log.info("Cache directory does not exist, nothing to optimize")
-        return
+    log.info(f"📁 Cache directory: {cache_dir}")
+    log.info(f"📅 Max age: {max_cache_age_days} days")
+    log.info(f"📦 Max size: {max_cache_size_mb}MB")
     
     try:
+        # Calculate cutoff time for old files
+        cutoff_time = time.time() - (max_cache_age_days * 24 * 3600)
+        
+        # Get all cache files
         cache_files = list(cache_dir.glob("*.pkl"))
         total_files = len(cache_files)
-        total_size_mb = 0
-        removed_files = 0
-        removed_size_mb = 0
+        deleted_files = 0
+        total_size_before = 0
+        total_size_after = 0
         
-        current_time = time.time()
-        max_age_seconds = max_cache_age_days * 24 * 3600
+        if total_files == 0:
+            log.info("📭 No cache files found")
+            return
         
-        log.info(f"📊 Found {total_files} cache files")
-        
+        # Calculate total size before cleanup
         for cache_file in cache_files:
-            try:
-                # Get file stats
-                stat = cache_file.stat()
-                file_size_mb = stat.st_size / (1024 * 1024)
-                file_age_seconds = current_time - stat.st_mtime
-                
-                # Check if file should be removed
-                should_remove = False
-                reason = ""
-                
-                # Remove old files
-                if file_age_seconds > max_age_seconds:
-                    should_remove = True
-                    reason = f"old ({file_age_seconds / 3600 / 24:.1f} days)"
-                
-                # Remove large files
-                elif file_size_mb > max_file_size_mb:
-                    should_remove = True
-                    reason = f"large ({file_size_mb:.1f} MB)"
-                
-                if should_remove:
-                    removed_size_mb += file_size_mb
-                    cache_file.unlink()
-                    removed_files += 1
-                    log.info(f"🗑️ Removed: {cache_file.name} ({reason})")
-                else:
-                    total_size_mb += file_size_mb
-                    
-            except Exception as e:
-                log.warning(f"⚠️ Error processing {cache_file.name}: {e}")
-                # Remove corrupted files
-                try:
-                    cache_file.unlink()
-                    removed_files += 1
-                    log.info(f"🗑️ Removed corrupted file: {cache_file.name}")
-                except:
-                    pass
+            total_size_before += cache_file.stat().st_size
         
-        # Check total cache size
-        if total_size_mb > max_cache_size_mb:
-            log.warning(f"⚠️ Cache size ({total_size_mb:.1f} MB) exceeds limit ({max_cache_size_mb} MB)")
-            # Remove oldest files to reduce size
-            cache_files = sorted(cache_dir.glob("*.pkl"), key=lambda x: x.stat().st_mtime)
-            for cache_file in cache_files:
-                if total_size_mb <= max_cache_size_mb * 0.8:  # Leave 20% buffer
-                    break
+        log.info(f"📊 Initial cache size: {total_size_before / (1024 * 1024):.1f}MB")
+        
+        # Remove old cache files
+        for cache_file in cache_files:
+            file_age = time.time() - cache_file.stat().st_mtime
+            if file_age > cutoff_time:
                 try:
-                    file_size_mb = cache_file.stat().st_size / (1024 * 1024)
                     cache_file.unlink()
-                    total_size_mb -= file_size_mb
-                    removed_files += 1
-                    removed_size_mb += file_size_mb
-                    log.info(f"🗑️ Removed for size limit: {cache_file.name}")
+                    deleted_files += 1
+                    log.debug(f"🗑️ Deleted old cache file: {cache_file.name}")
                 except Exception as e:
-                    log.warning(f"⚠️ Error removing {cache_file.name}: {e}")
+                    log.warning(f"Failed to delete cache file {cache_file.name}: {e}")
         
+        # Check cache size and remove oldest files if needed
+        remaining_files = list(cache_dir.glob("*.pkl"))
+        if remaining_files:
+            # Sort by modification time (oldest first)
+            remaining_files.sort(key=lambda x: x.stat().st_mtime)
+            
+            current_size_mb = sum(f.stat().st_size for f in remaining_files) / (1024 * 1024)
+            
+            if current_size_mb > max_cache_size_mb:
+                log.info(f"📦 Cache size ({current_size_mb:.1f}MB) exceeds limit ({max_cache_size_mb}MB)")
+                
+                # Remove oldest files until under limit
+                for cache_file in remaining_files:
+                    try:
+                        file_size_mb = cache_file.stat().st_size / (1024 * 1024)
+                        cache_file.unlink()
+                        deleted_files += 1
+                        current_size_mb -= file_size_mb
+                        log.debug(f"🗑️ Removed cache file for size limit: {cache_file.name}")
+                        
+                        if current_size_mb <= max_cache_size_mb:
+                            break
+                    except Exception as e:
+                        log.warning(f"Failed to delete cache file {cache_file.name}: {e}")
+        
+        # Calculate final size
+        final_files = list(cache_dir.glob("*.pkl"))
+        total_size_after = sum(f.stat().st_size for f in final_files)
+        
+        # Log optimization results
+        size_saved_mb = (total_size_before - total_size_after) / (1024 * 1024)
         log.info(f"✅ Cache optimization complete:")
-        log.info(f"   📊 Total files: {total_files}")
-        log.info(f"   🗑️ Removed files: {removed_files}")
-        log.info(f"   💾 Removed size: {removed_size_mb:.1f} MB")
-        log.info(f"   📁 Remaining size: {total_size_mb:.1f} MB")
+        log.info(f"   📁 Files processed: {total_files}")
+        log.info(f"   🗑️ Files deleted: {deleted_files}")
+        log.info(f"   💾 Size saved: {size_saved_mb:.1f}MB")
+        log.info(f"   📦 Final cache size: {total_size_after / (1024 * 1024):.1f}MB")
+        log.info(f"   📈 Space saved: {(size_saved_mb / (total_size_before / (1024 * 1024)) * 100):.1f}%")
+        
+        # Force garbage collection
+        gc.collect()
         
     except Exception as e:
         log.error(f"❌ Cache optimization failed: {e}")
 
-def show_cache_stats():
-    """Show current cache statistics"""
-    cache_dir = Path(get_env('CACHE_DIR', 'cache'))
-    
-    if not cache_dir.exists():
-        log.info("Cache directory does not exist")
-        return
-    
+def should_run_weekly_optimization():
+    """Check if weekly cache optimization should run (every Sunday)"""
     try:
-        cache_files = list(cache_dir.glob("*.pkl"))
-        total_files = len(cache_files)
-        total_size_mb = 0
-        oldest_file = None
-        newest_file = None
+        cache_dir = Path(get_env('CACHE_DIR', 'cache'))
+        optimization_log_file = cache_dir / "last_optimization.txt"
         
-        for cache_file in cache_files:
-            stat = cache_file.stat()
-            file_size_mb = stat.st_size / (1024 * 1024)
-            total_size_mb += file_size_mb
+        if optimization_log_file.exists():
+            with open(optimization_log_file, 'r') as f:
+                last_optimization = datetime.fromisoformat(f.read().strip())
             
-            if oldest_file is None or stat.st_mtime < oldest_file.stat().st_mtime:
-                oldest_file = cache_file
+            # Check if it's Sunday and more than 6 days since last optimization
+            current_time = datetime.now()
+            days_since_last = (current_time - last_optimization).days
             
-            if newest_file is None or stat.st_mtime > newest_file.stat().st_mtime:
-                newest_file = cache_file
-        
-        log.info(f"📊 Cache Statistics:")
-        log.info(f"   📁 Directory: {cache_dir}")
-        log.info(f"   📄 Total files: {total_files}")
-        log.info(f"   💾 Total size: {total_size_mb:.1f} MB")
-        
-        if oldest_file:
-            oldest_age = (time.time() - oldest_file.stat().st_mtime) / (24 * 3600)
-            log.info(f"   🕰️ Oldest file: {oldest_file.name} ({oldest_age:.1f} days old)")
-        
-        if newest_file:
-            newest_age = (time.time() - newest_file.stat().st_mtime) / (24 * 3600)
-            log.info(f"   🆕 Newest file: {newest_file.name} ({newest_age:.1f} days old)")
-        
+            # Run on Sunday (weekday 6) or if more than 7 days have passed
+            is_sunday = current_time.weekday() == 6
+            should_run = is_sunday and days_since_last >= 6
+            
+            if should_run:
+                log.info(f"📅 Weekly cache optimization scheduled for Sunday")
+            
+            return should_run
+        else:
+            # First time running, create log file and run optimization
+            cache_dir.mkdir(exist_ok=True)
+            with open(optimization_log_file, 'w') as f:
+                f.write(datetime.now().isoformat())
+            return True
+            
     except Exception as e:
-        log.error(f"❌ Error getting cache stats: {e}")
+        log.warning(f"Failed to check weekly optimization schedule: {e}")
+        return False
+
+def run_scheduled_cache_optimization():
+    """Run cache optimization if it's scheduled"""
+    if should_run_weekly_optimization():
+        optimize_cache_memory()
+        
+        # Update last optimization time
+        try:
+            cache_dir = Path(get_env('CACHE_DIR', 'cache'))
+            optimization_log_file = cache_dir / "last_optimization.txt"
+            with open(optimization_log_file, 'w') as f:
+                f.write(datetime.now().isoformat())
+        except Exception as e:
+            log.warning(f"Failed to update optimization log: {e}")
 
 def main():
     """Main function"""
     import argparse
     
     parser = argparse.ArgumentParser(description='Cache Optimizer - Clean up cache memory')
-    parser.add_argument('--stats', action='store_true', help='Show cache statistics only')
-    parser.add_argument('--force', action='store_true', help='Force optimization even if not Sunday')
+    parser.add_argument('--force', action='store_true', help='Force optimization regardless of schedule')
+    parser.add_argument('--weekly', action='store_true', help='Check weekly schedule and run if needed')
+    parser.add_argument('--info', action='store_true', help='Show cache information without cleaning')
     
     args = parser.parse_args()
     
-    if args.stats:
-        show_cache_stats()
+    if args.info:
+        # Show cache information
+        cache_dir = Path(get_env('CACHE_DIR', 'cache'))
+        if cache_dir.exists():
+            cache_files = list(cache_dir.glob("*.pkl"))
+            total_size = sum(f.stat().st_size for f in cache_files)
+            log.info(f"📊 Cache Information:")
+            log.info(f"   📁 Directory: {cache_dir}")
+            log.info(f"   📄 Files: {len(cache_files)}")
+            log.info(f"   💾 Size: {total_size / (1024 * 1024):.1f}MB")
+            
+            # Show oldest and newest files
+            if cache_files:
+                cache_files.sort(key=lambda x: x.stat().st_mtime)
+                oldest = datetime.fromtimestamp(cache_files[0].stat().st_mtime)
+                newest = datetime.fromtimestamp(cache_files[-1].stat().st_mtime)
+                log.info(f"   📅 Oldest file: {oldest.strftime('%Y-%m-%d %H:%M:%S')}")
+                log.info(f"   📅 Newest file: {newest.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            log.info("📁 Cache directory doesn't exist")
         return
     
-    # Check if it's Sunday (optional)
-    if not args.force:
-        today = datetime.now()
-        if today.weekday() != 6:  # Not Sunday
-            log.info("📅 Today is not Sunday. Use --force to run anyway.")
-            log.info("💡 Weekly cache optimization is scheduled for Sundays")
-            return
-    
-    log.info("🚀 Starting cache optimization...")
-    optimize_cache_memory()
-    log.info("✅ Cache optimization completed!")
+    if args.force:
+        log.info("🔧 Force running cache optimization...")
+        optimize_cache_memory()
+    elif args.weekly:
+        log.info("📅 Checking weekly schedule...")
+        run_scheduled_cache_optimization()
+    else:
+        # Default: run weekly check
+        log.info("📅 Running weekly cache optimization check...")
+        run_scheduled_cache_optimization()
 
 if __name__ == "__main__":
     main() 

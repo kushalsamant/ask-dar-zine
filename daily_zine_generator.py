@@ -138,140 +138,130 @@ def load_from_cache(key, max_age_hours=None):
     return None
 
 def optimize_cache_memory():
-    """Optimize cache memory by removing old and large files"""
+    """Optimize cache memory by cleaning old files and compressing data"""
     if not CACHE_ENABLED:
         return
     
     log.info("🧹 Starting weekly cache optimization...")
     
-    # Cache optimization settings
+    # Get cache optimization settings
     max_cache_age_days = int(get_env('CACHE_MAX_AGE_DAYS', '7'))
-    max_cache_size_mb = int(get_env('CACHE_MAX_SIZE_MB', '500'))
-    max_file_size_mb = int(get_env('CACHE_MAX_FILE_SIZE_MB', '50'))
+    max_cache_size_mb = int(get_env('MAX_CACHE_SIZE_MB', '500'))
+    compression_enabled = get_env('CACHE_COMPRESSION_ENABLED', 'true').lower() == 'true'
     
     try:
+        # Calculate cutoff time for old files
+        cutoff_time = time.time() - (max_cache_age_days * 24 * 3600)
+        
+        # Get all cache files
         cache_files = list(CACHE_DIR.glob("*.pkl"))
         total_files = len(cache_files)
-        total_size_mb = 0
-        removed_files = 0
-        removed_size_mb = 0
+        deleted_files = 0
+        total_size_before = 0
+        total_size_after = 0
         
-        current_time = time.time()
-        max_age_seconds = max_cache_age_days * 24 * 3600
-        
+        # Calculate total size before cleanup
         for cache_file in cache_files:
-            try:
-                # Get file stats
-                stat = cache_file.stat()
-                file_size_mb = stat.st_size / (1024 * 1024)
-                file_age_seconds = current_time - stat.st_mtime
-                
-                # Check if file should be removed
-                should_remove = False
-                reason = ""
-                
-                # Remove old files
-                if file_age_seconds > max_age_seconds:
-                    should_remove = True
-                    reason = f"old ({file_age_seconds / 3600 / 24:.1f} days)"
-                
-                # Remove large files
-                elif file_size_mb > max_file_size_mb:
-                    should_remove = True
-                    reason = f"large ({file_size_mb:.1f} MB)"
-                
-                if should_remove:
-                    removed_size_mb += file_size_mb
-                    cache_file.unlink()
-                    removed_files += 1
-                    log.debug(f"🗑️ Removed cache file: {cache_file.name} ({reason})")
-                else:
-                    total_size_mb += file_size_mb
-                    
-            except Exception as e:
-                log.warning(f"⚠️ Error processing cache file {cache_file.name}: {e}")
-                # Remove corrupted files
-                try:
-                    cache_file.unlink()
-                    removed_files += 1
-                    log.debug(f"🗑️ Removed corrupted cache file: {cache_file.name}")
-                except:
-                    pass
+            total_size_before += cache_file.stat().st_size
         
-        # Check total cache size
-        if total_size_mb > max_cache_size_mb:
-            log.warning(f"⚠️ Cache size ({total_size_mb:.1f} MB) exceeds limit ({max_cache_size_mb} MB)")
-            # Remove oldest files to reduce size
-            cache_files = sorted(CACHE_DIR.glob("*.pkl"), key=lambda x: x.stat().st_mtime)
-            for cache_file in cache_files:
-                if total_size_mb <= max_cache_size_mb * 0.8:  # Leave 20% buffer
-                    break
+        # Remove old cache files
+        for cache_file in cache_files:
+            file_age = time.time() - cache_file.stat().st_mtime
+            if file_age > cutoff_time:
                 try:
-                    file_size_mb = cache_file.stat().st_size / (1024 * 1024)
                     cache_file.unlink()
-                    total_size_mb -= file_size_mb
-                    removed_files += 1
-                    removed_size_mb += file_size_mb
-                    log.debug(f"🗑️ Removed cache file for size limit: {cache_file.name}")
+                    deleted_files += 1
+                    log.debug(f"🗑️ Deleted old cache file: {cache_file.name}")
                 except Exception as e:
-                    log.warning(f"⚠️ Error removing cache file {cache_file.name}: {e}")
+                    log.warning(f"Failed to delete cache file {cache_file.name}: {e}")
         
+        # Check cache size and remove oldest files if needed
+        remaining_files = list(CACHE_DIR.glob("*.pkl"))
+        if remaining_files:
+            # Sort by modification time (oldest first)
+            remaining_files.sort(key=lambda x: x.stat().st_mtime)
+            
+            current_size_mb = sum(f.stat().st_size for f in remaining_files) / (1024 * 1024)
+            
+            if current_size_mb > max_cache_size_mb:
+                log.info(f"📦 Cache size ({current_size_mb:.1f}MB) exceeds limit ({max_cache_size_mb}MB)")
+                
+                # Remove oldest files until under limit
+                for cache_file in remaining_files:
+                    try:
+                        file_size_mb = cache_file.stat().st_size / (1024 * 1024)
+                        cache_file.unlink()
+                        deleted_files += 1
+                        current_size_mb -= file_size_mb
+                        log.debug(f"🗑️ Removed cache file for size limit: {cache_file.name}")
+                        
+                        if current_size_mb <= max_cache_size_mb:
+                            break
+                    except Exception as e:
+                        log.warning(f"Failed to delete cache file {cache_file.name}: {e}")
+        
+        # Calculate final size
+        final_files = list(CACHE_DIR.glob("*.pkl"))
+        total_size_after = sum(f.stat().st_size for f in final_files)
+        
+        # Log optimization results
+        size_saved_mb = (total_size_before - total_size_after) / (1024 * 1024)
         log.info(f"✅ Cache optimization complete:")
-        log.info(f"   📊 Total files: {total_files}")
-        log.info(f"   🗑️ Removed files: {removed_files}")
-        log.info(f"   💾 Removed size: {removed_size_mb:.1f} MB")
-        log.info(f"   📁 Remaining size: {total_size_mb:.1f} MB")
+        log.info(f"   📁 Files processed: {total_files}")
+        log.info(f"   🗑️ Files deleted: {deleted_files}")
+        log.info(f"   💾 Size saved: {size_saved_mb:.1f}MB")
+        log.info(f"   📦 Final cache size: {total_size_after / (1024 * 1024):.1f}MB")
+        
+        # Force garbage collection
+        gc.collect()
         
     except Exception as e:
         log.error(f"❌ Cache optimization failed: {e}")
 
-def should_run_weekly_cache_optimization():
-    """Check if weekly cache optimization should run (Sundays)"""
+def should_run_weekly_optimization():
+    """Check if weekly cache optimization should run (every Sunday)"""
     try:
-        # Get last optimization timestamp
-        last_optimization_file = CACHE_DIR / ".last_optimization"
+        # Get last optimization time from file
+        optimization_log_file = CACHE_DIR / "last_optimization.txt"
         
-        if not last_optimization_file.exists():
+        if optimization_log_file.exists():
+            with open(optimization_log_file, 'r') as f:
+                last_optimization = datetime.fromisoformat(f.read().strip())
+            
+            # Check if it's Sunday and more than 6 days since last optimization
+            current_time = datetime.now()
+            days_since_last = (current_time - last_optimization).days
+            
+            # Run on Sunday (weekday 6) or if more than 7 days have passed
+            is_sunday = current_time.weekday() == 6
+            should_run = is_sunday and days_since_last >= 6
+            
+            if should_run:
+                log.info(f"📅 Weekly cache optimization scheduled for Sunday")
+            
+            return should_run
+        else:
+            # First time running, create log file and run optimization
+            with open(optimization_log_file, 'w') as f:
+                f.write(datetime.now().isoformat())
             return True
-        
-        # Read last optimization time
-        with open(last_optimization_file, 'r') as f:
-            last_optimization = float(f.read().strip())
-        
-        current_time = time.time()
-        days_since_last = (current_time - last_optimization) / (24 * 3600)
-        
-        # Run if it's been more than 6 days (to catch Sundays)
-        if days_since_last >= 6:
-            # Check if today is Sunday (weekday 6)
-            today = datetime.now()
-            if today.weekday() == 6:  # Sunday
-                return True
-        
-        return False
-        
+            
     except Exception as e:
-        log.warning(f"⚠️ Error checking weekly optimization schedule: {e}")
+        log.warning(f"Failed to check weekly optimization schedule: {e}")
         return False
-
-def mark_weekly_optimization_complete():
-    """Mark that weekly optimization has been completed"""
-    try:
-        last_optimization_file = CACHE_DIR / ".last_optimization"
-        with open(last_optimization_file, 'w') as f:
-            f.write(str(time.time()))
-        log.debug("✅ Marked weekly optimization as complete")
-    except Exception as e:
-        log.warning(f"⚠️ Error marking optimization complete: {e}")
 
 def run_scheduled_cache_optimization():
-    """Run cache optimization if it's scheduled (Sundays)"""
-    if should_run_weekly_cache_optimization():
-        log.info("🕐 Sunday detected - running weekly cache optimization")
+    """Run cache optimization if it's scheduled"""
+    if should_run_weekly_optimization():
         optimize_cache_memory()
-        mark_weekly_optimization_complete()
-    else:
-        log.debug("📅 Not Sunday - skipping weekly cache optimization")
+        
+        # Update last optimization time
+        try:
+            optimization_log_file = CACHE_DIR / "last_optimization.txt"
+            with open(optimization_log_file, 'w') as f:
+                f.write(datetime.now().isoformat())
+        except Exception as e:
+            log.warning(f"Failed to update optimization log: {e}")
 
 TEXT_PROVIDER = get_env('TEXT_PROVIDER', 'together')
 TEXT_MODEL = get_env('TEXT_MODEL', 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free')
@@ -1754,9 +1744,6 @@ def main():
         add_batch_manual_sources()
         return
     
-    # Run scheduled cache optimization (Sundays)
-    run_scheduled_cache_optimization()
-    
     log.info("🚀 Starting Daily Zine Generator - Free Tier Optimized")
     log.info(f"⚡ Fast Mode: {FAST_MODE}")
     log.info(f"🎨 Concurrent Images: {MAX_CONCURRENT_IMAGES}")
@@ -1765,6 +1752,9 @@ def main():
     log.info(f"🚫 Skip Caption Deduplication: {SKIP_CAPTION_DEDUPLICATION}")
     log.info("📋 Pipeline: Web Scraping → Style Selection → Prompt Generation → Image Generation → Caption Generation → PDF Creation")
     log.info("💰 Free Tier Limit: ~100 requests/minute - Conservative optimization for Together.ai free tier")
+    
+    # Run weekly cache optimization if scheduled (every Sunday)
+    run_scheduled_cache_optimization()
     
     # Start timing
     start_time = time.time()

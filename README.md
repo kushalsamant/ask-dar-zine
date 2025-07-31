@@ -54,12 +54,6 @@ ASK Daily Architectural Research Zine is an automated system that generates dail
 - **Detailed Logging**: Comprehensive execution logs
 - **Performance Monitoring**: Rate limiting and API optimization
 
-### 🧹 **Cache Management & Optimization**
-- **Weekly Cache Cleanup**: Automatic optimization every Sunday
-- **Smart File Removal**: Removes old, large, and corrupted cache files
-- **Size Limits**: Configurable cache size and file size limits
-- **Standalone Optimizer**: Independent cache optimization script
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -134,42 +128,11 @@ python daily_zine_generator.py --ultra
 python daily_zine_generator.py --images 10 --style technical
 ```
 
-## 🧹 Cache Management
-
-### **Automatic Weekly Optimization**
-The system automatically optimizes cache memory every Sunday:
-- Removes cache files older than 7 days
-- Removes files larger than 50 MB
-- Maintains total cache size under 500 MB
-- Logs optimization results
-
-### **Manual Cache Optimization**
-```bash
-# Show cache statistics
-python cache_optimizer.py --stats
-
-# Force cache optimization (any day)
-python cache_optimizer.py --force
-
-# Run cache optimization (Sundays only)
-python cache_optimizer.py
-```
-
-### **Cache Configuration**
-```env
-# Cache optimization settings
-CACHE_MAX_AGE_DAYS=7
-CACHE_MAX_SIZE_MB=500
-CACHE_MAX_FILE_SIZE_MB=50
-CACHE_MAX_AGE_HOURS=24
-```
-
 ## 📁 Project Structure
 
 ```
 ask-dar-zine/
 ├── daily_zine_generator.py      # 🎯 Complete zine generation pipeline
-├── cache_optimizer.py          # 🧹 Standalone cache optimization script
 ├── manual_sources.txt          # 📝 Manual source management (text file)
 ├── docker-compose.yml          # 🐳 FreshRSS Docker setup
 ├── ask.env                     # ⚙️ Environment variables (API keys, config)
@@ -184,7 +147,6 @@ ask-dar-zine/
 ├── logs/                       # 📝 Log files
 ├── captions/                   # 💬 Generated captions
 ├── scraped_content/            # 🌐 Scraped web content
-├── cache/                      # 📦 Cache files (auto-optimized weekly)
 └── checkpoints/                # 💾 Pipeline progress checkpoints
 ```
 
@@ -503,6 +465,12 @@ SCRAPER_TIMEOUT=30
 SCRAPER_MAX_RETRIES=3
 SCRAPER_ARTICLES_PER_SOURCE=10
 SCRAPER_CONTENT_DIR=scraped_content
+
+# Cache Optimization Settings
+CACHE_MAX_AGE_DAYS=7
+MAX_CACHE_SIZE_MB=500
+CACHE_COMPRESSION_ENABLED=true
+CACHE_MAX_AGE_HOURS=24
 ```
 
 ## 🚀 Deployment
@@ -522,6 +490,42 @@ python daily_zine_generator.py --test
 # Cron job for custom timing
 0 9 * * * cd /path/to/ask-dar-zine && python daily_zine_generator.py
 ```
+
+## 🧹 Cache Optimization
+
+### **Automatic Weekly Cleanup**
+The system automatically optimizes cache memory every Sunday to:
+- Remove cache files older than 7 days
+- Maintain cache size under 500MB
+- Improve system performance
+- Free up disk space
+
+### **Manual Cache Management**
+```bash
+# Check cache information
+python cache_optimizer.py --info
+
+# Force cache optimization
+python cache_optimizer.py --force
+
+# Run weekly schedule check
+python cache_optimizer.py --weekly
+```
+
+### **Cache Optimization Settings**
+```env
+# Cache cleanup settings
+CACHE_MAX_AGE_DAYS=7          # Remove files older than 7 days
+MAX_CACHE_SIZE_MB=500         # Maximum cache size in MB
+CACHE_COMPRESSION_ENABLED=true # Enable compression (future feature)
+CACHE_MAX_AGE_HOURS=24        # Cache freshness in hours
+```
+
+### **Cache Performance Benefits**
+- **Speed**: 100x faster API calls with cached responses
+- **Cost**: Reduced API usage and costs
+- **Reliability**: Fallback responses during API downtime
+- **Storage**: Automatic cleanup prevents disk space issues
 
 ## 🔍 Troubleshooting
 
