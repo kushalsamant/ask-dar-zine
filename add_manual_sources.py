@@ -8,10 +8,14 @@ import os
 import json
 import argparse
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv('ask.env')
 
 def load_existing_sources():
     """Load existing architectural sources"""
-    existing_feeds_file = "existing_architectural_feeds.json"
+    existing_feeds_file = os.getenv('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
     existing_feeds = []
     
     if os.path.exists(existing_feeds_file):
@@ -26,7 +30,7 @@ def load_existing_sources():
 
 def save_sources(sources):
     """Save sources to JSON file"""
-    existing_feeds_file = "existing_architectural_feeds.json"
+    existing_feeds_file = os.getenv('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
     
     try:
         with open(existing_feeds_file, 'w') as f:

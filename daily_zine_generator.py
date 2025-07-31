@@ -32,7 +32,7 @@ import gc
 
 
 # === 🔧 Setup real-time logging ===
-LOG_DIR = "logs"
+LOG_DIR = get_env('LOG_DIR', 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 log_filename = os.path.join(LOG_DIR, f"daily_zine_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 logging.basicConfig(
@@ -100,7 +100,7 @@ def get_env(var, default=None, required=False):
 # === 📊 Configuration ===
 
 # Cache system for 100x speed improvements
-CACHE_DIR = Path("cache")
+CACHE_DIR = Path(get_env('CACHE_DIR', 'cache'))
 CACHE_DIR.mkdir(exist_ok=True)
 
 def get_cache_path(key):
@@ -119,7 +119,9 @@ def save_to_cache(key, data):
     except Exception as e:
         log.debug(f"Cache save failed: {e}")
 
-def load_from_cache(key, max_age_hours=24):
+def load_from_cache(key, max_age_hours=None):
+    if max_age_hours is None:
+        max_age_hours = int(get_env('CACHE_MAX_AGE_HOURS', '24'))
     """Load data from cache if available and fresh"""
     if not CACHE_ENABLED:
         return None
@@ -239,17 +241,17 @@ class FreshRSSAutomation:
     
     def __init__(self):
         # FreshRSS configuration
-        self.freshrss_url = os.getenv('FRESHRSS_URL', 'http://localhost:8080')
-        self.freshrss_user = os.getenv('FRESHRSS_USER', 'admin')
-        self.freshrss_password = os.getenv('FRESHRSS_PASSWORD', 'password')
-        self.freshrss_db_path = os.getenv('FRESHRSS_DB_PATH', '/var/www/FreshRSS/data/users/admin/db.sqlite')
+        self.freshrss_url = get_env('FRESHRSS_URL', 'http://localhost:8080')
+        self.freshrss_user = get_env('FRESHRSS_USER', 'admin')
+        self.freshrss_password = get_env('FRESHRSS_PASSWORD', 'password')
+        self.freshrss_db_path = get_env('FRESHRSS_DB_PATH', '/var/www/FreshRSS/data/users/admin/db.sqlite')
         
         # Content directory
-        self.content_dir = os.getenv('SCRAPER_CONTENT_DIR', 'scraped_content')
+        self.content_dir = get_env('SCRAPED_CONTENT_DIR', 'scraped_content')
         os.makedirs(self.content_dir, exist_ok=True)
         
         # Rate limiting
-        self.delay_between_requests = 1  # seconds between requests
+        self.delay_between_requests = float(get_env('FRESHRSS_DELAY_BETWEEN_REQUESTS', '1'))  # seconds between requests
         
         # Load architectural feeds dynamically
         self.architectural_feeds = self.load_architectural_feeds()
@@ -278,7 +280,7 @@ class FreshRSSAutomation:
         }
         
         # Load additional sources from daily additions
-        existing_feeds_file = "existing_architectural_feeds.json"
+        existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
         try:
             if os.path.exists(existing_feeds_file):
                 with open(existing_feeds_file, 'r') as f:
@@ -302,7 +304,9 @@ class FreshRSSAutomation:
         
         return feeds
     
-    def get_recent_articles(self, hours: int = 24):
+    def get_recent_articles(self, hours: int = None):
+        if hours is None:
+            hours = int(get_env('FRESHRSS_ARTICLES_HOURS', '24'))
         """Get recent articles from FreshRSS database"""
         articles = []
         
@@ -637,7 +641,7 @@ def add_daily_architectural_source():
     selected_source = architectural_sources[source_index]
     
     # Check if this source is already in our feeds
-    existing_feeds_file = "existing_architectural_feeds.json"
+    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
     existing_feeds = []
     
     try:
@@ -683,7 +687,7 @@ def display_architectural_sources():
     log.info("=" * 50)
     
     # Load existing feeds
-    existing_feeds_file = "existing_architectural_feeds.json"
+    existing_feeds_file = get_env('EXISTING_FEEDS_FILE', 'existing_architectural_feeds.json')
     existing_feeds = []
     
     try:
@@ -815,8 +819,8 @@ def call_llm(prompt, system_prompt=None):
         "Content-Type": "application/json"
     }
     
-    max_retries = 3
-    retry_delays = [60, 120, 180]  # Increased progressive delays
+    max_retries = int(get_env('MAX_RETRIES', '3'))
+    retry_delays = [int(x.strip()) for x in get_env('LLM_RETRY_DELAYS', '60,120,180').split(',')]
     
     for attempt in range(max_retries):
         try:
@@ -922,7 +926,9 @@ def calculate_similarity_score(caption1, caption2):
     
     return intersection / union if union > 0 else 0.0
 
-def is_caption_unique(new_caption, existing_captions, similarity_threshold=0.3):
+def is_caption_unique(new_caption, existing_captions, similarity_threshold=None):
+    if similarity_threshold is None:
+        similarity_threshold = float(get_env('CAPTION_SIMILARITY_THRESHOLD', '0.3'))
     """Check if a new caption is unique compared to existing captions"""
     for existing_caption in existing_captions:
         similarity = calculate_similarity_score(new_caption, existing_caption)
@@ -931,7 +937,9 @@ def is_caption_unique(new_caption, existing_captions, similarity_threshold=0.3):
             return False
     return True
 
-def generate_unique_caption(prompt, existing_captions, max_attempts=5):
+def generate_unique_caption(prompt, existing_captions, max_attempts=None):
+    if max_attempts is None:
+        max_attempts = int(get_env('CAPTION_MAX_ATTEMPTS', '5'))
     """Generate a unique caption that doesn't repeat content from existing captions"""
     log.info(f"📝 Generating unique caption for: {prompt[:50]}...")
     
@@ -951,14 +959,15 @@ def generate_unique_caption(prompt, existing_captions, max_attempts=5):
                 ]):
                     lines.append(line)
             
-            # Ensure exactly 6 lines
-            if len(lines) >= 6:
-                result = '\n'.join(lines[:6])
+            # Ensure exactly configured number of lines
+            max_lines = int(get_env('CAPTION_MAX_LINES', '6'))
+            if len(lines) >= max_lines:
+                result = '\n'.join(lines[:max_lines])
             else:
                 # Pad with sophisticated lines if needed
-                while len(lines) < 6:
+                while len(lines) < max_lines:
                     lines.append("Architecture speaks through silent spaces")
-                result = '\n'.join(lines[:6])
+                result = '\n'.join(lines[:max_lines])
             
             # Check if this caption is unique
             if is_caption_unique(result, existing_captions):
@@ -998,7 +1007,7 @@ def generate_single_image(prompt, style_name, image_number):
     """Generate a single image using Together.ai API"""
     log.info(f"🎨 Generating {style_name} image {image_number}")
     
-    style_dir = os.path.join("images", style_name)
+    style_dir = os.path.join(get_env('IMAGES_DIR', 'images'), style_name)
     os.makedirs(style_dir, exist_ok=True)
     
     # Get enhanced style configuration with sophisticated prompts
@@ -1011,7 +1020,7 @@ def generate_single_image(prompt, style_name, image_number):
     full_prompt = f"{prompt}{style_config['prompt_suffix']}"
     negative_prompt = style_config['negative_prompt']
     
-    together_api_url = "https://api.together.xyz/v1/images/generations"
+    together_api_url = get_env('TOGETHER_API_URL', 'https://api.together.xyz/v1/images/generations')
     
     payload = {
         "model": style_config['model'],
@@ -1029,8 +1038,8 @@ def generate_single_image(prompt, style_name, image_number):
         "Content-Type": "application/json"
     }
     
-    max_retries = 3
-    retry_delays = [60, 120, 180]  # Increased progressive delays for image generation
+    max_retries = int(get_env('MAX_RETRIES', '3'))
+    retry_delays = [int(x.strip()) for x in get_env('IMAGE_RETRY_DELAYS', '60,120,180').split(',')]
     
     for attempt in range(max_retries):
         try:
@@ -1059,7 +1068,7 @@ def generate_single_image(prompt, style_name, image_number):
                                 f.write(image_response.content)
                             
                             log.info(f"✅ Generated {style_name} image {image_number}: {image_filename}")
-                            time.sleep(3)  # Increased rate limiting after successful image generation
+                            time.sleep(float(get_env('IMAGE_POST_GENERATION_DELAY', '3')))  # Configurable rate limiting after successful image generation
                             return image_path
                         else:
                             log.error(f"❌ Failed to download image from {image_url} (HTTP {image_response.status_code})")
@@ -1123,7 +1132,7 @@ def generate_all_images(prompts, style_name):
     max_workers = MAX_CONCURRENT_IMAGES if not FAST_MODE else 1
     
     # Pre-create style directory for all images
-    style_dir = Path("images") / style_name
+    style_dir = Path(get_env('IMAGES_DIR', 'images')) / style_name
     style_dir.mkdir(parents=True, exist_ok=True)
     
     def generate_image_with_index(args):
@@ -1217,7 +1226,7 @@ def generate_all_captions(prompts):
             return i, None, str(e)
     
     # Process in batches for better memory management
-    batch_size = 25 if BATCH_PROCESSING else len(prompts)
+    batch_size = int(get_env('BATCH_SIZE', '25')) if BATCH_PROCESSING else len(prompts)
     
     with tqdm(total=len(prompts), desc=f"📝 Generating captions", unit="caption") as pbar:
         for batch_start in range(0, len(prompts), batch_size):
@@ -1261,11 +1270,11 @@ def place_caption_with_white_band(c, caption, w, h, page_num):
     The band has extra padding to separate it from the image boundary.
     """
     text = caption.split('\n')
-    font_size = 14
-    line_spacing = 18
-    padding_x = 24
-    padding_y = 16
-    top_padding = 40  # Increased top padding for better separation from image
+    font_size = int(get_env('PDF_FONT_SIZE', '14'))
+    line_spacing = int(get_env('PDF_LINE_SPACING', '18'))
+    padding_x = int(get_env('PDF_PADDING_X', '24'))
+    padding_y = int(get_env('PDF_PADDING_Y', '16'))
+    top_padding = int(get_env('PDF_TOP_PADDING', '40'))  # Configurable top padding for better separation from image
 
     # Calculate text dimensions
     c.setFont("Helvetica-Bold", font_size)
@@ -1273,8 +1282,8 @@ def place_caption_with_white_band(c, caption, w, h, page_num):
     text_height = len(text) * line_spacing
 
     band_height = text_height + 2 * padding_y + top_padding
-    band_y = 0  # flush with the bottom of the page
-    band_x = 0
+    band_y = int(get_env('PDF_BAND_Y', '0'))  # flush with the bottom of the page
+    band_x = int(get_env('PDF_BAND_X', '0'))
     band_width = w
 
     # Draw white band
@@ -1300,7 +1309,7 @@ def create_daily_pdf(images, captions, style_name, theme):
         return None
     
     # Create output directory
-    output_dir = "daily_pdfs"
+    output_dir = get_env('DAILY_PDFS_DIR', 'daily_pdfs')
     os.makedirs(output_dir, exist_ok=True)
     
     # Create sequential title and PDF filename
@@ -1426,16 +1435,16 @@ def main():
         global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = 0.4  # 400ms for faster but still safe operation
+        RATE_LIMIT_DELAY = float(get_env('ULTRA_MODE_DELAY', '0.4'))  # Configurable for faster but still safe operation
     
     # Override settings for ultra mode (Free Tier Optimized - Conservative)
     if args.ultra:
         global FAST_MODE, SKIP_CAPTION_DEDUPLICATION, RATE_LIMIT_DELAY, MAX_CONCURRENT_IMAGES, MAX_CONCURRENT_CAPTIONS
         FAST_MODE = True
         SKIP_CAPTION_DEDUPLICATION = True
-        RATE_LIMIT_DELAY = 0.4  # 400ms - conservative for free tier safety
-        MAX_CONCURRENT_IMAGES = 10  # Conservative increase
-        MAX_CONCURRENT_CAPTIONS = 10  # Conservative increase
+        RATE_LIMIT_DELAY = float(get_env('ULTRA_MODE_DELAY', '0.4'))  # Configurable - conservative for free tier safety
+        MAX_CONCURRENT_IMAGES = int(get_env('ULTRA_MODE_CONCURRENT_IMAGES', '10'))  # Configurable conservative increase
+        MAX_CONCURRENT_CAPTIONS = int(get_env('ULTRA_MODE_CONCURRENT_CAPTIONS', '10'))  # Configurable conservative increase
     
     # Handle sources display
     if args.sources:
@@ -1496,7 +1505,8 @@ def main():
             time.sleep(2)  # Rate limiting between major steps
         
         # Step 3: Generate prompts
-        num_prompts = 5 if args.test else args.images
+        test_count = int(get_env('TEST_IMAGE_COUNT', '5'))
+        num_prompts = test_count if args.test else args.images
         log.info("=" * 60)
         log.info(f"✍️ STEP 3/6: Generating {num_prompts} prompts")
         log.info("=" * 60)
